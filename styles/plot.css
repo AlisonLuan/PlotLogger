@@ -1,0 +1,37 @@
+/***************************** plot area *****************************/
+.content {
+    flex-grow: 1; /* Let .content grow to fill the available space */
+    height: calc(100% - 20px);
+    margin: 10px;
+    /*padding: 05px;*/
+    display: flex;
+    flex-direction: column;
+    border-radius: 20px; /* Adjust the value as needed */
+    min-height: 400px; /* Ensure the plot area is never smaller than 500px */
+    min-width: 500px; /* Ensure the plot area is never smaller than 500px */
+    box-sizing: border-box; /* Ensure padding is included in the size */
+    /*transition: width 0.3s ease;/**/
+}
+
+#plot {
+    flex-grow: 1; /* Allow #plot to grow with .content */
+    width: 100%; /* Set width to fill the parent container */
+    height: 100%; /* Set height to fill the parent container */
+    /*margin-left: 5px; /* Adjust margin for sidebar */
+    border-radius: 20px; /* Adjust the value as needed */
+    /*background-color: #fff; /* Optional: Add a background for better visualization */
+    background-color: hsl(0 0% 98%); /* Lighter gray background */
+    box-sizing: border-box; /* Prevent overflow from padding or borders */
+}
+
+/* Increase toolbar button size */
+.js-plotly-plot .plotly .modebar-btn {
+    margin: 5px !important;  /* Adds space between buttons */
+}
+
+/* Optional: Make icons larger */
+.js-plotly-plot .plotly .modebar-btn svg {
+    width: 30px !important; 
+    height: 30px !important;
+    fill: black !important; /* Ensures the icon is visible */
+}

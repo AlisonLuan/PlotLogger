@@ -1,0 +1,24 @@
+
+
+.axis-config-container {
+    margin-bottom: 10px; /* Adds space between containers */
+    padding: 5px;
+}
+
+.axis-config-container label {
+    font-size: 16px;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.axis-inputs {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between labels and inputs */
+}
+
+.axis-inputs input {
+    width: 30%; /* Limit field width */
+    padding: 4px;
+    font-size: 16px; /* Ensure consistent font size */
+}

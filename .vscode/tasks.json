@@ -1,0 +1,13 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        // This matches the "preLaunchTask": "start-live-server" in launch.json
+        "label": "start-live-server",
+        "type": "shell",
+        "command": "npx live-server --port=5500",
+        "problemMatcher": []
+      }
+    ]
+  }
+  

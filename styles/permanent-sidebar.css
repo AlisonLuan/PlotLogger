@@ -1,0 +1,67 @@
+/* **************************** permanent sidebar **************************** */
+.permanent-sidebar {
+    width: 60px; /* Increased width for better usability */
+    /*height: calc(100vh - 30px); /* Subtracting top and bottom margin */
+    height: calc(100% - var(--navbar-height) - 20px); /* Windows - navbar - 2xmargin */
+    top: var(--navbar-height); /* Offset by navbar height */
+    position: fixed;
+    left: 0;
+    z-index: 2;
+    padding: 10px 0;
+    margin: 10px;
+    background-color:  white;
+    border-radius: 20px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /*border: 2px solid hsla(0, 0%, 100%, 0.993); /**/
+}
+
+/* Permanent Sidebar Buttons */
+.permanent-sidebar .icon-btn {
+    width: 40px;
+    height: 40px;
+    background-color: hsl(0 0% 98%); /* Lighter gray background */
+    color: rgb(0, 0, 0);
+    border: none;
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    margin-bottom: 20px;
+    font-size: 20px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    overflow: hidden;
+    padding: 0;
+}
+
+.permanent-sidebar .icon-btn:hover {
+    background-color: #dadada;
+    transform: scale(1.2); /* Slight increase for hover effect */
+}
+
+.permanent-sidebar .icon-btn .icon {
+    width: 80%;
+    height: 80%;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.icon-file {
+    background-image: url('../images/file-icon.png');
+}
+
+.icon-brush {
+    background-image: url('../images/brush-icon.png');
+}
+
+.icon-gear {
+    background-image: url('../images/gear-icon.png');
+}
+
+.icon-export {
+    background-image: url('../images/export-icon.png');
+}

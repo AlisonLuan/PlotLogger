@@ -1,0 +1,135 @@
+/***************************** sidebar:mainConfig *****************************/
+.drop-container {
+    width: 100%;
+    height: 50px;
+    border: 2px dashed hsl(214.3, 31.8%, 91.4%);
+    background-color: hsl(0, 0%, 98%);
+    color: rgb(94, 94, 94);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 50px;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background-color 0.3s, border-color 0.3s;
+    margin-bottom: 10px; /* 10px space below */
+}
+
+.drop-container:hover {
+    background-color: hsl(214.3, 31.8%, 91.4%);
+}
+
+.drop-container.active {
+    background-color: hsl(214.3, 60%, 85%);
+    border-color: hsl(214.3, 60%, 60%);
+}
+
+.button-container {
+    display: flex;
+    gap: 5px; /* Spacing between buttons */
+    justify-content: center; /* Center buttons if needed */
+}
+
+.button-container button {
+    width: auto; /* Adjust width dynamically */
+    flex: 1; /* Make both buttons take equal space */
+    padding: 10px;
+}
+
+#drop-text-log, #drop-text{
+    display: block;         /* Ensure block for ellipsis */
+    width: 100%;            /* Take the full width of parent */
+    white-space: nowrap;    /* Prevent wrapping */
+    overflow: hidden;       /* Hide overflow */
+    text-overflow: ellipsis;/* Show ellipsis on overflow */
+    text-align: center;     /* Center the text horizontally */
+  }
+/* dropdown */
+select {
+    margin-bottom: 10px;
+    padding: 10px;
+}
+
+#filterOptions {
+    width: 200px; /* Adjust as needed */
+    cursor: pointer; /* Indicate interactivity */
+}
+
+#filterOptions:hover {
+    background-color: #e6e6e6; /* Highlight dropdown on hover */
+}
+
+/* checkboxes */
+.checkbox-container {
+    /*min-height: 150px;/**/
+    height: clamp(150px, 50vh, 100vh); /* Limit height to 50vh */
+    margin-bottom: 10px;
+    /*display: flex; /* Enable flexbox for contained .checkbox-group */
+    /*flex-direction: column; /* Align children vertically */
+    overflow: auto; /* Add scroll if the content overflows */
+    border: 1px solid #ddd; /* Add a border for separation */
+    border-radius: 5px; /* Rounded corners for a modern look */
+    padding: 10px; /* Add padding for inner spacing */
+    background-color: #f9f9f9; /* Light background color */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+}
+
+.checkbox-group {
+    flex-grow: 1; /* Make the border container grow with the parent */
+    overflow-y: auto; /* Add scrolling if content exceeds height */
+    /*overflow-x: hidden;/**/
+    /*border: 1px solid #ddd;/**/
+    padding: 10px;
+}
+
+.checkbox-group label {
+    display: block;
+}
+
+/* Styling the resize handle for checkbox-sources */
+#resizeHandleSources {
+    height: 5px; /* Increase the height for easier interaction */
+    background-color: #ccc; /* Light gray color for visibility */
+    cursor: ns-resize; /* North-South resize cursor */
+    width: 70%;
+    margin: 10px auto; /* Center it */
+    position: relative;
+    z-index: 1;
+    margin-top: 0px; /* Add a gap between the sources container and the handle */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Add subtle shadow for separation */
+    border-radius: 5px; /* Rounded corners for a smoother look */
+}
+
+/*#checkbox-signals {
+    /*flex-grow: 1; /* Allow this container to grow dynamically */
+    /*min-height: 150; /* Prevent it from forcing #checkbox-sources to resize */
+    /*display: flex; /* Flexbox for inner alignment */
+    /*flex-direction: column; /* Ensure vertical alignment */
+    /*max-height: calc(100vh - 200px); /* Dynamically adjust for remaining space */
+    /*overflow: auto; /* Add scrolling for content overflow */
+    /*overflow-x: hidden;*/
+/*}*/
+
+/* Style for the Show Configuration button */
+#PlotButton {
+    padding: 10px;
+    background-color: #1faf24f3;
+    color: white;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+    margin-bottom: 10px;
+    box-sizing: border-box; /* Ensure padding is included in the button height */
+}
+
+#PlotButton:hover {
+    background-color: #17791c;
+}
+
+#PlotButton:disabled {
+    background-color: #ccc; /* Gray background */
+    color: #888; /* Lighter text color */
+    cursor: not-allowed; /* Indicate it's disabled */
+    opacity: 0.6; /* Reduce opacity */
+}
