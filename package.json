@@ -1,0 +1,18 @@
+{
+  "devDependencies": {
+    "@babel/preset-env": "^7.26.9",
+    "@babel/preset-typescript": "^7.26.0",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "jest"
+  },
+  "babel": {
+    "presets": [
+      "@babel/preset-env"
+    ]
+  }
+}

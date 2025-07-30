@@ -1,0 +1,75 @@
+{
+    "network": {
+        "protocol": "CAN",
+        "baudRate": 250000,
+        "messageCount": 120
+    },
+    "messages": [
+        {
+            "id": "0x100",
+            "name": "EngineData",
+            "dlc": 8,
+            "cycleTime": 0,
+            "sender": "PC",
+            "signals": [
+                {
+                    "name": "F1_Signal1",
+                    "startBit": 0,
+                    "length": 16,
+                    "byteOrder": "LittleEndian",
+                    "valueType": "Unsigned",
+                    "scaling": 0.125,
+                    "offset": 0,
+                    "units": "RPM",
+                    "valueRange": [0, 8000],
+                    "defaultValue": 0
+                },
+                {
+                    "name": "CoolantTemp",
+                    "startBit": 16,
+                    "length": 8,
+                    "byteOrder": "BigEndian",
+                    "valueType": "Signed",
+                    "scaling": 1,
+                    "offset": -40,
+                    "units": "°C",
+                    "valueRange": [-40, 125],
+                    "defaultValue": -40
+                }
+            ]
+        },
+        {
+            "id": "0x20E",
+            "name": "CmdToEngine",
+            "dlc": 8,
+            "cycleTime": 10,
+            "sender": "PC",
+            "signals": [
+                {
+                    "name": "EngineSpeed_Setpoint",
+                    "startBit": 0,
+                    "length": 16,
+                    "byteOrder": "LittleEndian",
+                    "valueType": "Unsigned",
+                    "scaling": 0.125,
+                    "offset": 0,
+                    "units": "RPM",
+                    "valueRange": [0, 8000],
+                    "defaultValue": 0
+                }
+            ]
+        }
+    ],
+    "nodes": [
+        {
+            "name": "ECU1",
+            "transmitMessages": ["EngineData","CoolantTemp"],
+            "receiveMessages": ["EngineSpeed_Setpoint"]
+        },
+        {
+            "name": "PC",
+            "transmitMessages": ["EngineSpeed_Setpoint"],
+            "receiveMessages": ["EngineData","CoolantTemp"]
+        }
+    ]
+}

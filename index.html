@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload and Plot Data</title>
+    <link rel="stylesheet" href="styles/styles.css">
+    <link rel="stylesheet" href="styles/permanent-sidebar.css">
+    <link rel="stylesheet" href="styles/sidebar.css">
+    <link rel="stylesheet" href="styles/sidebar-config-main.css">
+    <link rel="stylesheet" href="styles/sidebar-config-brush.css">
+    <link rel="stylesheet" href="styles/sidebar-config-gear.css">
+    <link rel="stylesheet" href="styles/plot.css">
+    <link rel="stylesheet" href="styles/shortcuts.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <a href="index.html">CAN Log Plotter</a>
+        <a href="shortcuts.html">Shortcuts</a>        
+    </nav>
+    
+    <!-- Small static sidebar on the left side. Not affected by interface events -->
+    <div class="permanent-sidebar">
+        <button id="arrowButton" class="icon-btn" title="Hide/Show Sidebar">←</button>
+        <button id="fileButton" class="icon-btn" title="Start" onclick="toggleSidebarContent('main')">
+            <i class="icon icon-file"></i>
+        </button>
+        <button id="brushButton" class="icon-btn" title="Customize Signals" onclick="toggleSidebarContent('brush')">
+            <i class="icon icon-brush"></i>
+        </button>
+        <button id="gearButton" class="icon-btn" title="Chart Settings" onclick="toggleSidebarContent('gear')">
+            <i class="icon icon-gear"></i>
+        </button>
+        <button id="ExportButton" class="icon-btn" title="Export as CSV">
+            <i class="icon icon-export"></i>
+        </button>
+    </div>
+
+    <!-- Main container made of a "sidebar" and the log region "content" -->
+    <div class="container">
+        <!-- Dynamic sidebar that changes according to interface events -->
+        <div class="sidebar">
+            <div id="resizeHandle"></div>
+            <!-- Invisible container that holds all sidebar configurations -->
+            <div id="sidebarContainer">
+                <!-- Main Configuration Content -->
+                <div class="sidebar-content active" id="mainConfig">
+                    <p>Load your files to start</p>
+                    <div id="drop-area" class="drop-container" data-type="database">
+                        <p id="drop-text">Load your Database here.</p>
+                        <input type="file" id="fileInput" hidden accept=".dbc,.sym">
+                    </div>
+                    <div id="drop-area-log" class="drop-container" data-type="log">
+                        <p id="drop-text-log">Load your Log here.</p>
+                        <input type="file" id="fileInputLog" hidden accept=".blf, .trc, .asc">
+                    </div>    
+                        <p>Source Sorting</p>
+                    <label for="filterOptions">Choose a filter:</label>
+                    <select id="filterOptions" size="1">
+                            <option value="noFilter">No Filter</option>
+                            <option value="filterById">Sort by ID</option>
+                            <option value="filterByName">Sort by Name</option>
+                            <option value="filterBySender">Sort by Sender</option>
+                     </select>                        
+                    <div class="checkbox-container" id="checkbox-sources">
+                        <label>Filter Sources</label>
+                        <div class="checkbox-group">
+                            <p>Apply a filter to see the sources.</p>
+                        </div>
+                    </div>
+                    <div id="resizeHandleSources"></div>
+                    <div class="checkbox-container" id="checkbox-signals">
+                        <label>Filter Signals</label>
+                        <div class="checkbox-group">
+                            <p>Select a source to see the signals.</p>
+                        </div>
+                    </div>
+                    <button id="PlotButton" disabled>Generate Plot!</button>         
+                </div>
+                <!-- Brush Configuration Content -->
+                <div class="sidebar-content" id="brushConfig">
+                    <div id="lineConfigurations">
+                        <p>Customization options will be shown
+                        once a plot has been generated.</p>
+                    </div>
+                </div>
+                <!-- Gear Configuration Content -->
+                <div class="sidebar-content" id="gearConfig">
+                    <p>Axis Configurations</p>
+                    <div class="axis-config-container">
+                        <label>Axis Y1 Limits</label>
+                        <div class="axis-inputs">
+                            <label for="y1-min">Min:</label>
+                            <input type="number" id="y1-min" class="axis-min" data-axis="y1">
+                            <label for="y1-max">Max:</label>
+                            <input type="number" id="y1-max" class="axis-max" data-axis="y1">
+                        </div>
+                    </div>
+                    
+                    <div class="axis-config-container">
+                        <label>Axis Y2 Limits</label>
+                        <div class="axis-inputs">
+                            <label for="y2-min">Min:</label>
+                            <input type="number" id="y2-min" class="axis-min" data-axis="y2">
+                            <label for="y2-max">Max:</label>
+                            <input type="number" id="y2-max" class="axis-max" data-axis="y2">
+                        </div>
+                    </div>
+                    
+                    <div class="axis-config-container">
+                        <label>Axis Y3 Limits</label>
+                        <div class="axis-inputs">
+                            <label for="y3-min">Min:</label>
+                            <input type="number" id="y3-min" class="axis-min" data-axis="y3">
+                            <label for="y3-max">Max:</label>
+                            <input type="number" id="y3-max" class="axis-max" data-axis="y3">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Plot area -->
+        <div class="content">
+            <div id="plot"></div>
+        </div>
+    </div>
+
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+
+    <div id="toast-container"></div>
+    
+    <!-- Scripts: Database -->
+    <script type="module" src="scripts/main-db-loader.js"></script>    
+    <script type="module" src="scripts/parser-dbc.js"></script>
+    <script type="module" src="scripts/parser-sym.js"></script>
+    <!-- Scripts: User Interface -->
+    <script type="module" src="scripts/main.js"></script>
+    <script src="scripts/sidebar.js"></script>
+    <script type="module" src="scripts/sidebar-main.js"></script>
+    <script src="scripts/sidebar-brush.js"></script>
+    <script src="scripts/sidebar-gear.js"></script>
+    <!-- Scripts: Log -->
+    <script type="module" src="scripts/main-log-loader.js"></script>
+    <script type="module" src="scripts/parser-blf.js"></script>
+    <script type="module" src="scripts/parser-trc.js"></script>
+    <script type="module" src="scripts/parser-asc.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako/dist/pako.min.js"></script>
+    <!-- Scripts: Plot -->
+    <!--<<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>-->
+    <script src="https://cdn.plot.ly/plotly-3.0.0.min.js"></script> 
+    <!--<script src="scripts/plotly-3.0.0.min.js"></script>-->
+    <script src="scripts/plot-deltacursor.js"></script>
+    <script src="scripts/plot-axismanager.js"></script>
+    <script src="scripts/plot.js"></script>
+    <!-- Scripts: CSV -->
+    <script type="module" src="scripts/csv-export.js"></script>
+
+    <!-- Tooltip container placed within the main body -->
+    <div id="custom-tooltip"></div>  
+
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shortcuts - CAN Log Plotter</title>
+  <link rel="stylesheet" href="styles/style.css">
+  <link rel="stylesheet" href="styles/shortcuts.css">
+</head>
+
+<body>
+  <!-- Navigation Bar -->
+  <div id="navbar-container"></div>
+  <script src="scripts/navbar.js"></script>
+
+  <!-- About Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Features and Shortcuts</h1>
+      <p>Accelerate your workflow with quick, intuitive shortcuts. </p>
+    </div>
+  </section>
+
+  <section class="features-container">
+
+    <!-- Feature 2 -->
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Permanent Sidebar</h2>
+        <p><strong>Show/Hide:</strong> Quickly toggle the sidebar to maximize your viewing area and focus on the plot when needed.</p>
+        <p><strong>File Selection:</strong> Load your database and log files and also select the signals to be plotted.</p>
+        <p><strong>Plot Adjustments:</strong> Customize line styles, colors, and markers to make your data clearer and easier to interpret.</p>
+        <p><strong>Y Axis limits:</strong> Manually set min and max values for each Y axis to fine-tune the graph scale.</p>
+        <p><strong>Export as CSV:</strong> Save the visible data points as a CSV file for further analysis or documentation.</p>
+      </div>
+      <div class="feature-media">
+        <img src="images/permanentSidebar.PNG" alt="Hover Toolbar" class="media-image" style="max-width: 50px;">
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Hover Toolbar</h2>
+        <p><strong>Toogle Hover:</strong> Enable or disable the hover functions.</p>
+        <p><strong>Compare:</strong>  Shows measurements for all signals at the same instant in X, making comparison easy.</p>
+        <p><strong>Closest:</strong> Highlights the closest measurement to the mouse pointer.</p>
+        <p><strong>Delta Cursor:</strong>  Activate two cursors to measure value differences and time gaps between points.</p>
+      </div>
+      <div class="feature-media">
+        <img src="images/hoverToolbar.PNG" alt="Hover Toolbar" class="media-image">
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Hover Compare</h2>
+        <p><strong>Hover over the plot:</strong> Displays the Y values of all visible signals at the same X-axis position, 
+          making it easy to analyze correlations and trends across signals.</p>
+        <p>Enabled by default.</p>
+        <p>Use Toogle Hover to disable.</p>  
+      </div>
+      <div class="feature-media">
+        <img src="images/hoverCompare.PNG" alt="Hover Toolbar" class="media-image">
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Hover Closest</h2>
+        <p><strong>Hover over the plot:</strong> Displays the Y value of the closest visible signal.</p>
+        <p>Click on the icon to enable.</p>
+        <p>Use Toogle Hover to disable.</p>  
+      </div>
+      <div class="feature-media">
+        <img src="images/hoverClosest.PNG" alt="Hover Toolbar" class="media-image">
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Delta Cursor</h2>
+        <p><strong>Click to place cursor:</strong> Adds two reference points on the plot to measure the time and value difference 
+          between any two data positions. Each click places a cursor. Subsequent clicks reset cursor.</p>
+        <p>Click on the icon to enable. Automatically enable "Hover Closest".</p>
+        <p>Use icon or Toogle Hover to disable.</p>  
+
+      </div>
+      <div class="feature-media">
+        <img src="images/deltaCursor.PNG" alt="Hover Toolbar" class="media-image">
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Additional Y-Axis</h2>
+        <p><strong>Droplist Y-Axis:</strong> The Y-axis dropdown lets you assign each signal to one of three vertical axes (Y1, Y2, or Y3), 
+          allowing you to separate signals with different scales or units for clearer visualization. This helps reduce overlap and makes 
+          the plot easier to read.</p>
+        <p>Only available on the main plot.</p>  
+      </div>
+      <div class="feature-media">
+        <img src="images/yAxis.png" alt="Hover Toolbar" class="media-image">
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Subplots</h2>
+        <p><strong>Droplist Subplots:</strong> The subplot dropdown allows you to assign signals to one of five separate plots stacked vertically. 
+          This is useful when working with many signals or different data types, helping you organize and compare them without visual clutter.</p>
+      </div>
+      <div class="feature-media">
+        <img src="images/subplots.png" alt="Hover Toolbar" class="media-image">
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Zoom by Scrolling</h2>
+        <p><strong>Scroll:</strong> Zoom in/out X and Y</p>
+        <p><strong>Ctrl + Scroll:</strong> Zoom in/out X</p>
+        <p><strong>Shift + Scroll:</strong> Zoom in/out Y</p>
+        <p><strong>!!Video will follow!!</strong> Watch the Nyancat in the meantime.</p>      </div>
+      <div class="feature-media">
+        <img src="images/nyan.gif" alt="Quick Navigation GIF" class="media-gif">
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <h2>Zoom by Dragging</h2>
+        <p><strong>Double Click:</strong> Autoscale</p>
+        <p><strong>Scroll:</strong> Zoom in/out X and Y</p>
+        <p><strong>Ctrl + Scroll:</strong> Zoom in/out X</p>
+        <p><strong>Shift + Scroll:</strong> Zoom in/out Y</p>
+        <p><strong>!!Video will follow!!</strong> Watch the Nyancat in the meantime.</p>
+      </div>
+      <div class="feature-media">
+        <img src="images/nyan.gif" alt="Quick Navigation GIF" class="media-gif">
+      </div>
+    </div>
+
+  </section>
+</body>
+
+</html>
