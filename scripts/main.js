@@ -554,6 +554,9 @@ function findSignalInDatabase(signalName) {
           res.multiplexerStartBit  = signal.multiplexerStartBit;
           res.multiplexerLength    = signal.multiplexerLength;
           res.multiplexerByteOrder = signal.multiplexerByteOrder;
+          if (signal.multiplexerName) {
+            res.multiplexerName = signal.multiplexerName;
+          }
         }
 
         return res;

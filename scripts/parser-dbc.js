@@ -78,6 +78,7 @@ export function parseDBC(content) {
         if (signalMatch && currentMessage) {
             const signal = {
                 name: signalMatch[1],
+                multiplexerName: undefined,
                 startBit: parseInt(signalMatch[4], 10),
                 length: parseInt(signalMatch[5], 10),
                 byteOrder: signalMatch[6] === "1" ? "LittleEndian" : "BigEndian",
@@ -158,6 +159,7 @@ export function parseDBC(content) {
             if (signal.multiplexerValue !== undefined) {
                 signal.isMultiplexed = true;
                 if (muxSignal) {
+                    signal.multiplexerName = muxSignal.name;
                     signal.multiplexerStartBit = muxSignal.startBit;
                     signal.multiplexerLength = muxSignal.length;
                     signal.multiplexerByteOrder = muxSignal.byteOrder;

@@ -245,12 +245,12 @@ export function parseSYM(content) {
     }
 
     const muxm = line.match(
-      // 1: name     2: startBit  3: length  4: hexValue    5: optional "-m"
-      /^Mux\s*=\s*(\w+)\s+(\d+)\s*,\s*(\d+)\s+([0-9A-Fa-f]+)(?:h)?(?:\s+(-m))?$/
+      // 1: quoted name  2: bare name  3: startBit  4: length  5: hexValue  6: optional "-m" (Motorola)
+      /^Mux\s*=\s*(?:"([^"]+)"|(\S+))\s+(\d+)\s*,\s*(\d+)\s+([0-9A-Fa-f]+)(?:[hH])?(?:\s+(-m))?(?:\s*\/\/.*)?$/
     );
     if (muxm) {
-      const [, baseName, sb, ln, hv, mSuffix] = muxm;
-      const mname = baseName;
+      const [, quotedName, bareName, sb, ln, hv, mSuffix] = muxm;
+      const mname = quotedName || bareName;
       const isMotorola  = Boolean(mSuffix);
       const startBit = parseInt(sb, 10);
       const length = parseInt(ln, 10);
@@ -304,6 +304,7 @@ export function parseSYM(content) {
 
       const sig = {
         name: vname,
+        multiplexerName: currentMuxName || null,
         startBit,
         length,
         byteOrder: endianFlag ? 'BigEndian' : 'LittleEndian',
@@ -365,6 +366,7 @@ export function parseSYM(content) {
 
         current.signals.push({
           name: def.name,
+          multiplexerName: currentMuxName || null,
           startBit: sb,
           length: def.length,
           byteOrder: bo,

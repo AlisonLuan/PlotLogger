@@ -37,8 +37,8 @@ export async function parseTRC(file) {
         if (cols[2] === "FFFFFFFF") return null; // Ignore bus info lines
         return {
             timestamp: formatTimestamp(parseFloat(cols[1]) / 1000),
-            arbitrationId: parseInt(cols[2], 10),
-            isExtendedId: cols[2].length > 4,
+            arbitrationId: parseInt(cols[2], 16),
+            isExtendedId: cols[2].length > 3,
             dlc: parseInt(cols[3]),
             data: cols.slice(4, 4 + parseInt(cols[3])).map(hex => parseInt(hex, 16))
         };
@@ -47,8 +47,8 @@ export async function parseTRC(file) {
     function parseMsgV1_1(cols) {
         return {
             timestamp: formatTimestamp(parseFloat(cols[1]) / 1000 + startTime),
-            arbitrationId: parseInt(cols[3], 10),
-            isExtendedId: cols[3].length > 4,
+            arbitrationId: parseInt(cols[3], 16),
+            isExtendedId: cols[3].length > 3,
             dlc: parseInt(cols[4]),
             data: cols.slice(5, 5 + parseInt(cols[4])).map(hex => parseInt(hex, 16)),
             isRx: cols[2] === "Rx"

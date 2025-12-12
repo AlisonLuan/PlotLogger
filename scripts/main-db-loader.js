@@ -61,9 +61,6 @@ const databaseHandler = {
     buildUnifiedDatabase(parsedData) {
         return {
             messages: parsedData.messages.map((msg) => {
-                // Detect if message contains multiplexed signals and try to infer mux definition
-                const muxSignal = msg.signals.find(sig => sig.isMultiplexer);
-
                 return {
                     id: msg.id,
                     name: msg.name,
@@ -72,9 +69,17 @@ const databaseHandler = {
                     description: msg.comment,
                     signals: msg.signals.map((sig) => {
                         const isMultiplexed = sig.multiplexerValue !== undefined && sig.multiplexerValue !== null;
+                        const matchingMux = isMultiplexed
+                            ? msg.signals.find(mux =>
+                                mux.isMultiplexer &&
+                                (sig.multiplexerName ? mux.name === sig.multiplexerName : true)
+                              )
+                            : null;
+                        const fallbackMux = msg.signals.find(mux => mux.isMultiplexer);
 
                         return {
                             name: sig.name,
+                            ...(sig.multiplexerName && { multiplexerName: sig.multiplexerName }),
                             startBit: sig.startBit,
                             length: sig.length,
                             byteOrder: sig.byteOrder,
@@ -91,10 +96,10 @@ const databaseHandler = {
                             ...(isMultiplexed && {
                                 isMultiplexed: true,
                                 multiplexerValue: sig.multiplexerValue,
-                                // Inherit the multiplexer signal definition from the message
-                                multiplexerStartBit: muxSignal?.startBit ?? 0,
-                                multiplexerLength: muxSignal?.length ?? 8,
-                                multiplexerByteOrder: muxSignal?.byteOrder ?? 'LittleEndian',
+                                // Inherit the multiplexer signal definition from the matching mux (if any)
+                                multiplexerStartBit: matchingMux?.startBit ?? fallbackMux?.startBit ?? 0,
+                                multiplexerLength: matchingMux?.length ?? fallbackMux?.length ?? 8,
+                                multiplexerByteOrder: matchingMux?.byteOrder ?? fallbackMux?.byteOrder ?? 'LittleEndian',
                             }),
                         };
                     })
