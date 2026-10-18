@@ -9,37 +9,22 @@ import databaseHandler from "./main-db-loader.js";
 */
 function populateCheckboxList(list, container, emptyMessage) {
     if (list.length > 0) {
-      // Sort the list alphabetically
-      list.sort((a, b) => a.localeCompare(b));
-      let html = "";
+      container.replaceChildren();
+      list.sort((a, b) => a.label.localeCompare(b.label));
       list.forEach(item => {
-        // Parse out the two parts (before and inside parentheses)
-        let descriptionText = "";
-        const match = item.match(/^(.*)\s*\((.*)\)$/);
-        if (match) {
-          const part1 = match[1].trim();
-          const part2 = match[2].trim();
-          let msgObj = findMessageInDatabaseById(part1);
-          if (!msgObj) {
-            msgObj = findMessageInDatabaseById(part2);
-          }
-          if (!msgObj) {
-            msgObj = findMessageInDatabaseByName(part1) || findMessageInDatabaseByName(part2);
-          }
-          if (msgObj && msgObj.description && msgObj.description.trim() !== "") {
-            descriptionText = msgObj.description;
-          }
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = item.value;
+        if (item.messageId !== undefined) checkbox.dataset.messageId = item.messageId;
+        if (item.messageName !== undefined) checkbox.dataset.messageName = item.messageName;
+        label.append(checkbox, document.createTextNode(` ${item.label}`));
+        if (item.description) {
+          label.addEventListener('mousemove', event => window.showTooltip(event, item.description));
+          label.addEventListener('mouseleave', window.hideTooltip);
         }
-        // Build the label with tooltip events only if a valid description exists.
-        html += `
-          <label
-            ${descriptionText ? `onmousemove='showTooltip(event, ${JSON.stringify(descriptionText)})'` : ""}
-            onmouseleave="hideTooltip()"
-          >
-            <input type="checkbox" value="${item}"> ${item}
-          </label>`;
+        container.appendChild(label);
       });
-      container.innerHTML = html;
     } else {
       container.innerHTML = `<p>${emptyMessage}</p>`;
     }
@@ -72,32 +57,29 @@ function populateCheckboxGroup(filter, dropdownContent) {
         // Do not populate sources, but call a function to handle signals if needed
         populateSignals();
     } else if (filter === 'filterById') {
-        // Combine IDs and message names into "ID Name" format
-        const idLabels = dropdownContent.ID.map((id, index) => `${id} (${dropdownContent.MsgName[index]})`);
+        const messages = databaseHandler.getDatabase()?.messages || [];
+        const idLabels = messages.map(message => {
+          return { value: message.id, label: `${message.id} (${message.name})`, messageId: message.id, description: message.description };
+        });
         populateCheckboxList(idLabels, checkboxGroup, 'No IDs available.');
     } else if (filter === 'filterByName') {
-        // Combine IDs and message names into "ID Name" format
-        const NamedLabels = dropdownContent.MsgName.map((name, index) => `${name} (${dropdownContent.ID[index]})`);
-        populateCheckboxList(NamedLabels, checkboxGroup, 'No Names available.');
+        const messages = databaseHandler.getDatabase()?.messages || [];
+        const namedLabels = messages.map(message => {
+          return { value: message.name, label: `${message.name} (${message.id})`, messageId: message.id, messageName: message.name, description: message.description };
+        });
+        populateCheckboxList(namedLabels, checkboxGroup, 'No Names available.');
     } else if (filter === 'filterBySender') {
-        populateCheckboxList(dropdownContent.Sender, checkboxGroup, 'No senders available.');
+        const senders = Array.from(new Set(dropdownContent.Sender));
+        populateCheckboxList(senders.map(sender => ({ value: sender, label: sender })), checkboxGroup, 'No senders available.');
     }
 }
 
 // Tracks all checked signals, e.g. "Speed (Engine)" 
 const selectedSignals = new Set();
+const signalKey = (messageId, signalName) => JSON.stringify([messageId, signalName]);
 
-function handleSignalMouseMove(e) {
-    const tooltip = document.getElementById('custom-tooltip');
-    tooltip.style.display = 'block';
-    tooltip.textContent = 'temperamental';
-    tooltip.style.left = (e.pageX + 10) + 'px';
-    tooltip.style.top = (e.pageY + 10) + 'px';
-}
-
-function handleSignalMouseLeave() {
-    const tooltip = document.getElementById('custom-tooltip');
-    tooltip.style.display = 'none';
+function clearSelectedSignals() {
+  selectedSignals.clear();
 }
 
 /**
@@ -117,17 +99,21 @@ function populateSignals(database) {
     const checkboxGroup = document.querySelector('#checkbox-signals .checkbox-group');
     const selectedSources = Array.from(
       document.querySelectorAll('#checkbox-sources .checkbox-group input[type="checkbox"]:checked')
-    ).map(checkbox => checkbox.value);
+    ).map(checkbox => ({
+      value: checkbox.value,
+      messageId: checkbox.dataset.messageId,
+      messageName: checkbox.dataset.messageName
+    }));
   
     // Clear existing content
     checkboxGroup.innerHTML = '';
-    const allSignals = new Set();
+    const allSignals = new Map();
   
     if (selectedSources.length === 0) {
       // If no sources are selected, display all signals from all messages
       database.messages.forEach(message => {
         message.signals.forEach(signal => {
-          allSignals.add(`${signal.name} (${message.name})`);
+          allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name });
         });
       });
     } else {
@@ -135,27 +121,25 @@ function populateSignals(database) {
       const filterType = document.getElementById('filterOptions').value;
       selectedSources.forEach(source => {
         if (filterType === 'filterById') {
-          const idOnly = source.split(' (')[0];
-          const message = database.messages.find(msg => msg.id === idOnly);
+          const message = database.messages.find(msg => msg.id === source.messageId);
           if (message) {
             message.signals.forEach(signal => {
-              allSignals.add(`${signal.name} (${message.name})`);
+              allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name });
             });
           }
         } else if (filterType === 'filterByName') {
-          const nameOnly = source.split(' (')[0];
-          const message = database.messages.find(msg => msg.name === nameOnly);
+          const message = database.messages.find(msg => msg.id === source.messageId && msg.name === source.messageName);
           if (message) {
             message.signals.forEach(signal => {
-              allSignals.add(`${signal.name} (${message.name})`);
+              allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name });
             });
           }
         } else if (filterType === 'filterBySender') {
           database.messages
-            .filter(msg => msg.sender === source)
+            .filter(msg => msg.sender === source.value)
             .forEach(message => {
               message.signals.forEach(signal => {
-                allSignals.add(`${signal.name} (${message.name})`);
+                allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name });
               });
             });
         }
@@ -163,42 +147,31 @@ function populateSignals(database) {
     }
   
     // Convert the set to an array and sort it
-    const sortedSignals = Array.from(allSignals).sort((a, b) => a.localeCompare(b));
+    const sortedSignals = Array.from(allSignals.values())
+      .sort((a, b) => `${a.signalName} (${a.messageName})`.localeCompare(`${b.signalName} (${b.messageName})`));
   
     if (sortedSignals.length > 0) {
-      let html = "";
-      sortedSignals.forEach(signalString => {
-        const isChecked = selectedSignals.has(signalString);
-        const parts = signalString.split(" (");
-        const sigName = parts[0];
-        const msgName = parts[1] ? parts[1].replace(")", "") : "";
-        // Get the description from the database.
-        const signalObj = findSignalInDatabase(sigName, msgName);
-        // Check if there's a valid description.
-        const hasDescription = signalObj && signalObj.description && signalObj.description.trim() !== "";
-        const description = hasDescription ? signalObj.description : "";
-        
-        html += `
-            <label
-              ${hasDescription ? `onmousemove='showTooltip(event, ${JSON.stringify(description)})'` : ""}
-              onmouseleave="hideTooltip()"
-            >
-              <input type="checkbox" value="${signalString}" ${isChecked ? 'checked' : ''} />
-              ${signalString}
-            </label>`;
-      });
-      checkboxGroup.innerHTML = html;
-  
-      // Attach change listeners to the checkboxes
-      const inputs = checkboxGroup.querySelectorAll('input[type="checkbox"]');
-      inputs.forEach(input => {
-        input.addEventListener('change', e => {
-          if (e.target.checked) {
-            selectedSignals.add(e.target.value);
-          } else {
-            selectedSignals.delete(e.target.value);
-          }
+      checkboxGroup.replaceChildren();
+      sortedSignals.forEach(({ signalName, messageId, messageName }) => {
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        const key = signalKey(messageId, signalName);
+        const signal = database.messages.find(item => item.id === messageId)?.signals.find(item => item.name === signalName);
+        checkbox.type = 'checkbox';
+        checkbox.value = key;
+        checkbox.dataset.signalName = signalName;
+        checkbox.dataset.messageId = messageId;
+        checkbox.checked = selectedSignals.has(key);
+        label.append(checkbox, document.createTextNode(` ${signalName} (${messageName})`));
+        if (signal?.description) {
+          label.addEventListener('mousemove', event => window.showTooltip(event, signal.description));
+          label.addEventListener('mouseleave', window.hideTooltip);
+        }
+        checkbox.addEventListener('change', event => {
+          if (event.target.checked) selectedSignals.add(key);
+          else selectedSignals.delete(key);
         });
+        checkboxGroup.appendChild(label);
       });
     } else {
       checkboxGroup.innerHTML = `<p>No signals available for the selected sources.</p>`;
@@ -295,5 +268,4 @@ export { populateSignals }; // Export if used in other modules
 export { populateCheckboxGroup }; // Export if used in other modules
 export { handleFilterOptionsScroll }; // Export if used in other modules
 export { updateButtonColor }; // Export if used in other modules
-export { handleSignalMouseMove }; // Export if used in other modules
-export { handleSignalMouseLeave }; // Export if used in other modules
+export { clearSelectedSignals };

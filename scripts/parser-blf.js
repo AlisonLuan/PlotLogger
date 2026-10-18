@@ -1,8 +1,3 @@
-//let file = null;
-//let fileReader = null;
-let currentPosition = 0;
-let globalstartTimestamp;
-
 // CAN Message Types
 const CAN_MESSAGE = 1;
 const LOG_CONTAINER = 10;
@@ -27,74 +22,153 @@ const DIR = 0x1;
 // Time Units
 const TIME_TEN_MICS = 0x00000001;
 const TIME_ONE_NANS = 0x00000002;
+const MAX_BLF_FILE_SIZE = 512 * 1024 * 1024;
+const MAX_CONTAINER_SIZE = 256 * 1024 * 1024;
+const MAX_BLF_UNCOMPRESSED_SIZE = 512 * 1024 * 1024;
+const INFLATE_INPUT_CHUNK_SIZE = 16 * 1024;
 
 
 export async function parseBLF(file) {
     try {
-        const parsedMessages = []; // Initialize an array to store parsed messages
+        const parsedMessages = [];
+        if (file.size > MAX_BLF_FILE_SIZE) {
+            throw new RangeError("BLF files larger than 512 MiB are not supported.");
+        }
 
         const headerBuffer = await file.slice(0, 72).arrayBuffer();
         const data = new DataView(headerBuffer);
 
         const header = FILE_HEADER_STRUCTunpack(data);
+        if (Number(header.fileSize) > MAX_BLF_FILE_SIZE) {
+            throw new RangeError("BLF files larger than 512 MiB are not supported.");
+        }
 
         if (header.signature !== "LOGG") {
-            console.error("Error: Invalid file signature. Expected 'LOGG', but got:", header.signature);
-            return parsedMessages; // Return an empty array
+            throw new Error(`Invalid BLF signature: expected 'LOGG', got '${header.signature}'.`);
         }
 
-        // Extract global start timestamp
-        globalstartTimestamp = systemTimeToTimestamp(header.timeStart);
-
-        const headerExtensionBuffer = await file.slice(72, header.headerSize).arrayBuffer();
-
-        const objectBuffer = await file.slice(header.headerSize, header.headerSize + 16).arrayBuffer();
-        const objectData = new DataView(objectBuffer);
-        const object = OBJ_HEADER_BASE_STRUCTunpack(objectData);
-
-        if (object.signature !== "LOBJ") {
-            console.error("Error: Invalid object signature. Expected 'LOBJ', but got:", object.signature);
-            return parsedMessages; // Return an empty array
+        const startTimestamp = systemTimeToTimestamp(header.timeStart);
+        const fileSize = Number(header.fileSize);
+        if (fileSize < header.headerSize || fileSize > file.size) {
+            throw new Error("BLF header declares an invalid file size.");
         }
+        let offset = header.headerSize;
+        let totalUncompressedSize = 0;
+        while (offset + 16 <= fileSize) {
+            const objectBuffer = await file.slice(offset, offset + 16).arrayBuffer();
+            const object = OBJ_HEADER_BASE_STRUCTunpack(new DataView(objectBuffer));
+            if (object.signature !== "LOBJ") {
+                throw new Error(`Invalid BLF object signature at byte ${offset}.`);
+            }
+            if (object.objectSize < object.headerSize + 16 || offset + object.objectSize > fileSize) {
+                throw new Error(`Invalid BLF object size at byte ${offset}.`);
+            }
 
-        const objectContentBuffer = await file.slice(
-            header.headerSize + 16,
-            header.headerSize + 16 + (object.objectSize - 16)
-        ).arrayBuffer();
-        let dataView = new DataView(objectContentBuffer);
-
-        if (object.objectType === LOG_CONTAINER) {
-            const objData = LOG_CONTAINER_STRUCTunpack(dataView);
-
-            let containerData = new Uint8Array(dataView.buffer, 16);
-            if (objData.compressionMethod === ZLIB_DEFLATE) {
-                try {
-                    containerData = pako.inflate(containerData); // Decompress data if needed
-                } catch (error) {
-                    console.error("Error decompressing data:", error);
-                    return parsedMessages; // Return an empty array
+            if (object.objectType === LOG_CONTAINER) {
+                const objectContentBuffer = await file.slice(
+                    offset + object.headerSize,
+                    offset + object.objectSize
+                ).arrayBuffer();
+                const containerView = new DataView(objectContentBuffer);
+                const container = LOG_CONTAINER_STRUCTunpack(containerView);
+                if (container.sizeUncompressed > MAX_CONTAINER_SIZE) {
+                    throw new RangeError("BLF container expands beyond the 256 MiB safety limit.");
+                }
+                if (container.sizeUncompressed > MAX_BLF_UNCOMPRESSED_SIZE - totalUncompressedSize) {
+                    throw new RangeError("BLF data expands beyond the 512 MiB total safety limit.");
+                }
+                let containerData = new Uint8Array(objectContentBuffer, 16);
+                if (container.compressionMethod === ZLIB_DEFLATE) {
+                    if (!globalThis.pako?.Inflate) {
+                        throw new Error("pako is required to read compressed BLF containers.");
+                    }
+                    const maxOutputSize = Math.min(
+                        MAX_CONTAINER_SIZE,
+                        MAX_BLF_UNCOMPRESSED_SIZE - totalUncompressedSize
+                    );
+                    containerData = inflateContainer(containerData, maxOutputSize);
+                } else if (container.compressionMethod !== NO_COMPRESSION) {
+                    throw new Error(`Unsupported BLF compression method ${container.compressionMethod}.`);
+                }
+                if (containerData.byteLength > MAX_CONTAINER_SIZE) {
+                    throw new RangeError("BLF container expands beyond the 256 MiB safety limit.");
+                }
+                totalUncompressedSize += containerData.byteLength;
+                if (totalUncompressedSize > MAX_BLF_UNCOMPRESSED_SIZE) {
+                    throw new RangeError("BLF data expands beyond the 512 MiB total safety limit.");
+                }
+                if (container.sizeUncompressed && containerData.byteLength !== container.sizeUncompressed) {
+                    throw new Error("BLF container decompressed size does not match its header.");
+                }
+                for (const message of parseData(containerData, startTimestamp)) {
+                    parsedMessages.push({
+                        timestamp: message.timestamp,
+                        arbitrationId: message.arbitrationId,
+                        data: message.data,
+                        channel: message.channel !== undefined ? message.channel : null,
+                        isExtendedId: message.isExtendedId,
+                        isRemoteFrame: message.isRemoteFrame,
+                        isRx: message.isRx,
+                        isFd: message.isFd,
+                        isErrorFrame: message.isErrorFrame,
+                        dlc: message.dlc,
+                        bitrateSwitch: message.bitrateSwitch,
+                        errorStateIndicator: message.errorStateIndicator
+                    });
                 }
             }
-
-            // Use a generator to parse the container data
-            const generator = parseData(containerData);
-            for (const message of generator) {
-                parsedMessages.push({
-                    timestamp: message.timestamp,           // Timestamp in seconds
-                    arbitrationId: message.arbitrationId,     // Message ID in decimal
-                    data: message.data,                       // Raw CAN payload as Uint8Array
-                    channel: message.channel !== undefined ? message.channel : null, // Use actual channel (even if 0)
-                    isExtendedId: message.isExtendedId,       // Whether the ID is extended
-                    isRemoteFrame: message.isRemoteFrame,     // Whether it's a remote frame
-                    isRx: message.isRx                        // Whether it's received
-                });
+            const objectEnd = offset + object.objectSize;
+            const alignedObjectEnd = (objectEnd + 3) & ~3;
+            if (alignedObjectEnd > fileSize && objectEnd !== fileSize) {
+                throw new Error(`Truncated BLF object padding at byte ${objectEnd}.`);
             }
+            offset = Math.min(alignedObjectEnd, fileSize);
         }
 
-        return parsedMessages; // Return the array of parsed messages
+        function inflateContainer(compressedData, maxOutputSize) {
+            const inflater = new globalThis.pako.Inflate();
+            const chunks = [];
+            let outputSize = 0;
+            let exceededLimit = false;
+            inflater.onData = chunk => {
+                outputSize += chunk.byteLength;
+                if (outputSize > maxOutputSize) {
+                    exceededLimit = true;
+                    return;
+                }
+                chunks.push(chunk);
+            };
+
+            for (let offset = 0; offset < compressedData.length; offset += INFLATE_INPUT_CHUNK_SIZE) {
+                const end = Math.min(offset + INFLATE_INPUT_CHUNK_SIZE, compressedData.length);
+                inflater.push(compressedData.subarray(offset, end), end === compressedData.length);
+                if (exceededLimit) {
+                    throw new RangeError("BLF container exceeds the decompressed data safety limit.");
+                }
+                if (inflater.err) {
+                    throw new Error(`Unable to decompress BLF container: ${inflater.msg}`);
+                }
+            }
+            if (compressedData.length === 0) {
+                inflater.push(compressedData, true);
+            }
+            if (!inflater.ended) {
+                throw new Error("BLF container contains incomplete zlib data.");
+            }
+
+            const result = new Uint8Array(outputSize);
+            let offset = 0;
+            for (const chunk of chunks) {
+                result.set(chunk, offset);
+                offset += chunk.byteLength;
+            }
+            return result;
+        }
+
+        return parsedMessages;
     } catch (error) {
         console.error("Error processing the file:", error);
-        return []; // Return an empty array on error
+        throw error;
     }
 }
 
@@ -530,15 +604,7 @@ function systemTimeToTimestamp(systemTime) {
         const [year, month, , day, hour, minute, second, milliseconds] = systemTime;
 
         // Create a JavaScript Date object
-        const date = new Date(
-            year,
-            month - 1, // Months are 0-based in JavaScript
-            day,
-            hour,
-            minute,
-            second,
-            milliseconds / 1000 // Convert microseconds to milliseconds
-        );
+        const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, milliseconds));
 
         // Return the timestamp (seconds since UNIX epoch)
         return date.getTime() / 1000; // Convert from milliseconds to seconds
@@ -553,43 +619,29 @@ function systemTimeToTimestamp(systemTime) {
  * @param {Uint8Array} data - The binary data to parse.
  * @yields {object} Parsed message objects with relevant fields.
  */
-function* parseData(data) {
+function* parseData(data, fileStartTimestamp) {
     // Local copies of sizes and unpack functions
     const objHeaderBaseSize = 16; // OBJ_HEADER_BASE_STRUCT.size
     const objHeaderV1Size = 16; // OBJ_HEADER_V1_STRUCT.size
     const objHeaderV2Size = 24; // OBJ_HEADER_V2_STRUCT.size
-    const canFd64MsgSize = 42; // CAN_FD_MSG_64_STRUCT.size
-
-    let startTimestamp = globalstartTimestamp;
+    const canFd64MsgSize = 42;
     const maxPos = data.byteLength;
     let pos = 0;
 
-    // Parsing loop
-    while (true) {
-
-        // Find next object with "LOBJ" signature
-        try {
-            pos = findLOBJ(data, pos, Math.min(pos + 8, maxPos)); // Helper function
-        } catch (error) {
-            if (pos + 8 > maxPos) {
-                // Not enough data in container
-                return;
-            }
-            throw new Error("Could not find next object");
-        }
-
-        // Parse object header
+    while (pos + objHeaderBaseSize <= maxPos) {
+        const objectStart = pos;
         const header = unpackObjHeaderBase(data, pos);
         const [signature, , headerVersion, objSize, objType] = header;
-
         if (signature !== "LOBJ") {
-            throw new Error("Invalid object signature");
+            throw new Error(`Invalid object signature at container byte ${pos}.`);
         }
-
         const nextPos = pos + objSize;
-        if (nextPos > maxPos) {
-            // Object continues in the next container
-            return;
+        if (objSize < objHeaderBaseSize || nextPos > maxPos) {
+            throw new Error(`Invalid object size at container byte ${pos}.`);
+        }
+        const alignedNextPos = (nextPos + 3) & ~3;
+        if (alignedNextPos > maxPos && nextPos !== maxPos) {
+            throw new Error(`Truncated object padding at container byte ${nextPos}.`);
         }
         pos += objHeaderBaseSize;
 
@@ -602,14 +654,14 @@ function* parseData(data) {
             [flags, , , timestamp] = unpackObjHeaderV2(data, pos);
             pos += objHeaderV2Size;
         } else {
-            //console.warn(`Unknown object header version (${headerVersion})`);
-            pos = nextPos;
+            pos = Math.min(alignedNextPos, maxPos);
             continue;
         }
+        if (pos > nextPos) throw new Error(`Invalid object header size at container byte ${pos}.`);
 
         // Calculate absolute timestamp
         const factor = flags === 1 ? 1e-5 : 1e-9;
-        timestamp = Number(timestamp) * factor + startTimestamp;
+        timestamp = Number(timestamp) * factor + fileStartTimestamp;
 
         // Parse object data based on objType
         switch (objType) {
@@ -630,10 +682,7 @@ function* parseData(data) {
             }
             case CAN_ERROR_EXT: {
                 const members = unpackCanErrorExt(data, pos);
-                const channel = members[0];
-                const dlc = members[5];
-                const canId = members[7];
-                const canData = members[9];
+                const { channel, dlc, id: canId, data: canData } = members;
                 yield {
                     timestamp,
                     isErrorFrame: true,
@@ -646,7 +695,7 @@ function* parseData(data) {
                 break;
             }
             case CAN_FD_MESSAGE: {
-                const [channel, flags, dlc, canId, , , fdFlags, validBytes, canData] = unpackCanFdMsg(data, pos);
+                const { channel, flags, dlc, arbitrationId: canId, fdFlags, validDataBytes: validBytes, data: canData } = unpackCanFdMsg(data, pos);
                 yield {
                     timestamp,
                     arbitrationId: canId & 0x1FFFFFFF,
@@ -656,29 +705,33 @@ function* parseData(data) {
                     isRx: !Boolean(flags & DIR),
                     bitrateSwitch: Boolean(fdFlags & 0x2),
                     errorStateIndicator: Boolean(fdFlags & 0x4),
-                    dlc: dlcToLength(dlc), // Assume `dlcToLength` function exists
+                    dlc: dlcToLength(dlc),
                     data: canData.slice(0, validBytes),
                     channel: channel - 1,
                 };
                 break;
             }
             case CAN_FD_MESSAGE_64: {
-                const [
+                const {
                     channel,
                     dlc,
-                    validBytes,
-                    ,
-                    canId,
-                    ,
-                    fdFlags,
-                    ,
-                    ,
-                    ,
-                    ,
-                    ,
+                    validPayloadLength: validBytes,
+                    arbitrationId: canId,
+                    flags: fdFlags,
                     direction,
-                ] = unpackCanFd64Msg(data, pos);
-                pos += canFd64MsgSize;
+                    extDataOffset
+                } = unpackCanFd64Msg(data, pos);
+                if (pos + canFd64MsgSize > nextPos) {
+                    throw new Error(`Truncated CAN FD 64 header at container byte ${pos}.`);
+                }
+                const payloadOffset = pos + canFd64MsgSize;
+                const payloadEnd = extDataOffset
+                    ? objectStart + extDataOffset
+                    : nextPos;
+                if (payloadEnd > nextPos) {
+                    throw new Error(`Invalid CAN FD 64 extended-data offset at container byte ${pos}.`);
+                }
+                const availablePayloadBytes = Math.max(0, payloadEnd - payloadOffset);
                 yield {
                     timestamp,
                     arbitrationId: canId & 0x1FFFFFFF,
@@ -689,18 +742,27 @@ function* parseData(data) {
                     bitrateSwitch: Boolean(fdFlags & 0x2000),
                     errorStateIndicator: Boolean(fdFlags & 0x4000),
                     dlc: dlcToLength(dlc),
-                    data: data.slice(pos, pos + validBytes),
+                    data: data.slice(
+                        payloadOffset,
+                        payloadOffset + Math.min(validBytes, availablePayloadBytes)
+                    ),
                     channel: channel - 1,
                 };
                 break;
             }
+
             default:
                 // This line has been commented out so as not to overflow the console, but the parser itself does not fully recognise the blf.
                 //console.warn(`Unknown object type (${objType})`);
         }
 
-        pos = nextPos;
+        pos = Math.min(alignedNextPos, maxPos);
     }
+}
+
+function dlcToLength(dlc) {
+    const lengths = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64];
+    return lengths[dlc] ?? dlc;
 }
 
 /**

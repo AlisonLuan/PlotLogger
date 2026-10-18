@@ -6,17 +6,6 @@
  * @param {number} inputBitSize - The size of the signal in bits.
  * @returns {number} - The calculated end bit position.
  */
-function calculateEndBit(inputStartBit, inputBitSize) {
-    const rowStart = Math.floor(inputStartBit / 8);
-    const relStart = inputStartBit % 8;
-    const invStart = 7 - relStart;
-    const invStartOffset = invStart + (rowStart * 8);
-    const endBit = (invStartOffset + inputBitSize) - 1;
-    const modEnd = endBit % 8;
-    const norEnd = 8 - modEnd - 1;
-    return (Math.floor(endBit / 8) * 8) + norEnd;
-}
-
 /**
  * Extracts a raw value from a CAN message payload.
  * Supports both Big Endian (Motorola) and Little Endian formats.
@@ -28,32 +17,33 @@ function calculateEndBit(inputStartBit, inputBitSize) {
  * @returns {number} - Extracted raw value.
  */
 export function extractRawValue(data, startBit, length, byteOrder) {
-    let newStartBit = byteOrder === "BigEndian" ? calculateEndBit(startBit, length) : startBit;
-    const startByte = Math.floor(startBit / 8);
-    const endByte = Math.ceil((newStartBit + length) / 8);
-    const bitOffset = startBit % 8;
-
-    // Extract relevant bytes
-    let valueBytes = data.slice(startByte, endByte);
-    if (byteOrder === "LittleEndian") {
-        valueBytes.reverse();
+    if (!Array.isArray(data) && !(data instanceof Uint8Array)) {
+        throw new TypeError("CAN payload must be an array of bytes.");
+    }
+    if (!Number.isInteger(startBit) || startBit < 0 ||
+        !Number.isInteger(length) || length < 1) {
+        throw new RangeError("Signal start bit and length must be positive integers.");
     }
 
-    // Convert to binary and extract bits
-    const binaryString = valueBytes
-        .map(byte => byte.toString(2).padStart(8, '0'))
-        .join('');
-
-    let rawBinary;
+    let rawValue = 0n;
     if (byteOrder === "BigEndian") {
-        rawBinary = binaryString.substring(7 - bitOffset, 7 - bitOffset + length);
+        let bitIndex = startBit;
+        for (let index = 0; index < length; index++) {
+            const byteIndex = Math.floor(bitIndex / 8);
+            if (byteIndex >= data.length) return NaN;
+            const bitInByte = bitIndex % 8;
+            rawValue = (rawValue << 1n) | BigInt((data[byteIndex] >> bitInByte) & 1);
+            bitIndex = bitInByte === 0 ? bitIndex + 15 : bitIndex - 1;
+        }
     } else {
-        // For little endian, count from the right side of the binary string.
-        rawBinary = binaryString.substring(
-            binaryString.length - (bitOffset + length),
-            binaryString.length - bitOffset
-        );
+        for (let index = 0; index < length; index++) {
+            const bitIndex = startBit + index;
+            const byteIndex = Math.floor(bitIndex / 8);
+            if (byteIndex >= data.length) return NaN;
+            const bitInByte = bitIndex % 8;
+            if ((data[byteIndex] >> bitInByte) & 1) rawValue |= 1n << BigInt(index);
+        }
     }
 
-    return parseInt(rawBinary, 2);
+    return rawValue <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(rawValue) : rawValue;
 }

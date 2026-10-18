@@ -50,7 +50,7 @@ function createYAxisConfig(axisKey) {
         case "yaxis50":
             return {
                 title: { text: 'Subplot D' }, 
-                domain: Array.isArray(plotData.activeSubplots.s5domain) ? [...plotData.activeSubplots.sp5domain] : [0, 1],
+                domain: Array.isArray(plotData.activeSubplots.sp5domain) ? [...plotData.activeSubplots.sp5domain] : [0, 1],
                 anchor: 'x',
                 showline: true, 
             };

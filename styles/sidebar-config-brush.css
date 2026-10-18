@@ -74,17 +74,17 @@
 }
 
 /* Label styles (optional) */
-label {
+.line-config label {
     font-size: 14px;
 }
 
 /* Range slider styling */
-input[type="range"] {
+.line-config input[type="range"] {
     margin-top: 5px; /* Add some space between the label-span and range */
 }
 
 /* Span styles for values */
-span {
+.line-config span {
     font-size: 14px;
     font-weight: bold;
     margin-left: 0px; /* Space between label and span */

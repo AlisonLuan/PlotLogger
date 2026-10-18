@@ -4,7 +4,7 @@ describe('parseTRC', () => {
     test('parses V1.0 messages and ignores bus info lines', async () => {
         const fileContent = `
 ;$FILEVERSION=1.0
-M1 2000 1234 3 0A 0B 0C
+M1 2000 100 3 0A 0B 0C
 M1 2001 FFFFFFFF 3 0A 0B 0C
     `.trim();
         const file = { text: async () => fileContent };
@@ -14,7 +14,7 @@ M1 2001 FFFFFFFF 3 0A 0B 0C
         expect(messages).toHaveLength(1);
         expect(messages[0]).toEqual({
             timestamp: 2000 / 1000, // 2 seconds
-            arbitrationId: 1234,
+            arbitrationId: 0x100,
             data: [10, 11, 12],
             channel: null,
             isExtendedId: false,
@@ -32,7 +32,7 @@ M1 2001 FFFFFFFF 3 0A 0B 0C
         const fileContent = `
 ;$FILEVERSION=1.1
 ;$STARTTIME=43831.5
-M1 2000 Rx 1234 3 0A 0B 0C
+M1 2000 Rx 100 3 0A 0B 0C
     `.trim();
         const file = { text: async () => fileContent };
         const messages = await parseTRC(file);
@@ -40,12 +40,28 @@ M1 2000 Rx 1234 3 0A 0B 0C
         expect(messages).toHaveLength(1);
         expect(messages[0]).toEqual({
             timestamp: 2000 / 1000 + expectedStartTime, // 2 + startTime
-            arbitrationId: 1234,
+            arbitrationId: 0x100,
             data: [10, 11, 12],
             channel: null,
             isExtendedId: false,
             isRemoteFrame: false,
             isRx: true
+        });
+    });
+
+    test("retains TRC v2 FD flags in returned messages", async () => {
+        const file = {
+            text: async () => [
+                ";$FILEVERSION=2.0",
+                ";$COLUMNS=T,O,I,B,L,d,D",
+                "FE 4000 7FF 2 2 Rx 0A 0B"
+            ].join("\n")
+        };
+        const messages = await parseTRC(file);
+        expect(messages[0]).toMatchObject({
+            isFd: true,
+            bitrateSwitch: true,
+            errorStateIndicator: true
         });
     });
 
@@ -64,7 +80,7 @@ M1 2000 Rx 1234 3 0A 0B 0C
         const fileContent = `
 ;$FILEVERSION=1.3
 ;$STARTTIME=43831.5
-M1 3000 1 Rx 1A2B 99 3 0A 0B 0C
+M1 3000 1 Rx 7FF 99 3 0A 0B 0C
     `.trim();
         const file = { text: async () => fileContent };
         const messages = await parseTRC(file);
@@ -72,9 +88,9 @@ M1 3000 1 Rx 1A2B 99 3 0A 0B 0C
         expect(messages).toHaveLength(1);
         expect(messages[0]).toEqual({
             timestamp: 3000 / 1000 + expectedStartTime, // 3 + startTime
-            arbitrationId: parseInt("1A2B", 16), // 6699
+            arbitrationId: parseInt("7FF", 16),
             data: [10, 11, 12],
-            channel: 1,
+            channel: 0,
             isExtendedId: false,
             isRemoteFrame: false,
             isRx: true
@@ -100,7 +116,7 @@ M1 3000 1 Rx 1A2B 99 3 0A 0B 0C
 ;$FILEVERSION=2.0
 ;$STARTTIME=43831.5
 ;$COLUMNS=T,O,I,B,L,d,D
-FB 4000 1A2B 2 3 Rx 0A 0B 0C
+FB 4000 7FF 2 3 Rx 0A 0B 0C
     `.trim();
         const file = { text: async () => fileContent };
         const messages = await parseTRC(file);
@@ -108,12 +124,28 @@ FB 4000 1A2B 2 3 Rx 0A 0B 0C
         expect(messages).toHaveLength(1);
         expect(messages[0]).toEqual({
             timestamp: 4000 / 1000 + expectedStartTime, // 4 + startTime
-            arbitrationId: parseInt("1A2B", 16), // 6699
+            arbitrationId: parseInt("7FF", 16),
             data: [10, 11, 12],
-            channel: 2,
+            channel: 1,
             isExtendedId: false,
             isRemoteFrame: false,
-            isRx: true
+            isRx: true,
+            isFd: true,
+            bitrateSwitch: true,
+            errorStateIndicator: false
         });
+    });
+
+    test('defaults missing file version to 1.0 and detects extended IDs by value', async () => {
+        const file = { text: async () => 'M1 0 18FF7844 1 AA' };
+        const messages = await parseTRC(file);
+        expect(messages).toHaveLength(1);
+        expect(messages[0].arbitrationId).toBe(0x18FF7844);
+        expect(messages[0].isExtendedId).toBe(true);
+    });
+
+    test('rejects unsupported version 1.2 explicitly', async () => {
+        const file = { text: async () => ';$FILEVERSION=1.2\nM1 0 Rx 100 0' };
+        await expect(parseTRC(file)).rejects.toThrow('TRC version 1.2 is not supported');
     });
 });

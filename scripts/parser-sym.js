@@ -254,15 +254,7 @@ export function parseSYM(content) {
       const isMotorola  = Boolean(mSuffix);
       const startBit = parseInt(sb, 10);
       const length = parseInt(ln, 10);
-      // strip trailing “h” if present
-      let rawHex = hv.replace(/h$/i, '');
-      // if odd-length, pad with leading zero so match(/../g) works
-      if (rawHex.length % 2 === 1) rawHex = '0' + rawHex;
-      // split into bytes (or empty array if somehow still no match)
-      const bytes = rawHex.match(/../g) || [];
-      // reverse byte order, or fall back to rawHex
-      const revHex = bytes.length ? bytes.reverse().join('') : rawHex;
-      const value = parseInt(revHex, 16);
+      const value = parseInt(hv.replace(/h$/i, ''), 16);
 
       // store the raw Mux value
       muxValues[current.name][mname] = value;
@@ -277,7 +269,7 @@ export function parseSYM(content) {
       signalsDefs[mname].name = mname;
       signalsDefs[mname].startBit = startBit;
       signalsDefs[mname].length = length;
-      signalsDefs[mname].byteOrder = 'LittleEndian';// isMotorola ? 'BigEndian' : 'LittleEndian';
+      signalsDefs[mname].byteOrder = isMotorola ? 'BigEndian' : 'LittleEndian';
       signalsDefs[mname].isMultiplexer = true;
 
       current.signals.push({ ...signalsDefs[mname] });
@@ -299,7 +291,7 @@ export function parseSYM(content) {
       if (signalsDefs[vname]?.isMultiplexer) {
         signalsDefs[vname].startBit = startBit;
         signalsDefs[vname].length = length;
-        signalsDefs[vname].byteOrder = 'LittleEndian'; // fixed
+        signalsDefs[vname].byteOrder = muxSignal?.byteOrder ?? 'LittleEndian';
       }
 
       const sig = {
@@ -321,7 +313,7 @@ export function parseSYM(content) {
         ...(mv !== undefined && muxSignal && {
           multiplexerStartBit: muxSignal.startBit,
           multiplexerLength: muxSignal.length,
-          multiplexerByteOrder: 'LittleEndian'//muxSignal.byteOrder
+          multiplexerByteOrder: muxSignal.byteOrder
         })
       };
 
@@ -359,10 +351,9 @@ export function parseSYM(content) {
       const muxSignal = currentMuxName ? signalsDefs[currentMuxName] : null;
 
       if (def) {
-        if (def.isMultiplexer) {
-          def.startBit = sb;
-          def.byteOrder = 'BigEndian';
-        }
+      if (def.isMultiplexer) {
+        def.startBit = sb;
+      }
 
         current.signals.push({
           name: def.name,
@@ -383,7 +374,7 @@ export function parseSYM(content) {
           ...(mv !== null && muxSignal && {
             multiplexerStartBit: muxSignal.startBit,
             multiplexerLength: muxSignal.length,
-            multiplexerByteOrder: 'LittleEndian' // muxSignal.byteOrder
+            multiplexerByteOrder: muxSignal.byteOrder
           })
         });
       }

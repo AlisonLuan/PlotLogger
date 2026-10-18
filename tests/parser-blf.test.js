@@ -1,179 +1,203 @@
+import { deflate, Inflate } from "pako";
 import { parseBLF } from "../scripts/parser-blf.js";
 
-describe('parseBLF', () => {
-  test('parses a valid BLF file with one CAN message', async () => {
-    // Total file size: we'll use 152 bytes for our synthetic file.
-    const totalSize = 152;
-    const buffer = new ArrayBuffer(totalSize);
-    const view = new DataView(buffer);
-    const u8 = new Uint8Array(buffer);
+function createInnerObject(type, payload, timestamp = 0) {
+    const objectSize = 32 + payload.length;
+    const bytes = new Uint8Array((objectSize + 3) & ~3);
+    const view = new DataView(bytes.buffer);
+    bytes.set([76, 79, 66, 74], 0);
+    view.setUint16(4, 16, true);
+    view.setUint16(6, 1, true);
+    view.setUint32(8, objectSize, true);
+    view.setUint32(12, type, true);
+    view.setUint32(16, 1, true);
+    view.setBigUint64(24, BigInt(timestamp), true);
+    bytes.set(payload, 32);
+    return bytes;
+}
 
-    // Helper to write an ASCII string at a given offset.
-    function writeString(str, offset) {
-      for (let i = 0; i < str.length; i++) {
-        u8[offset + i] = str.charCodeAt(i);
-      }
-    }
+function createContainer(data, compressionMethod = 0, declaredSize = data.length) {
+    const storedData = compressionMethod === 2 ? deflate(data) : data;
+    const objectSize = 32 + storedData.length;
+    const bytes = new Uint8Array((objectSize + 3) & ~3);
+    const view = new DataView(bytes.buffer);
+    bytes.set([76, 79, 66, 74], 0);
+    view.setUint16(4, 16, true);
+    view.setUint16(6, 1, true);
+    view.setUint32(8, objectSize, true);
+    view.setUint32(12, 10, true);
+    view.setUint16(16, compressionMethod, true);
+    view.setUint32(24, declaredSize, true);
+    bytes.set(storedData, 32);
+    return bytes;
+}
 
-    // --- Segment 1: File Header (bytes 0-72) ---
-    // Signature "LOGG" (4 bytes)
-    writeString("LOGG", 0);
-    // headerSize (4 bytes, little-endian): set to 72 (no extra header extension)
+function createFile(containers, milliseconds = 0) {
+    const fileSize = 72 + containers.reduce((size, container) => size + container.length, 0);
+    const bytes = new Uint8Array(fileSize);
+    const view = new DataView(bytes.buffer);
+    bytes.set([76, 79, 71, 71], 0);
     view.setUint32(4, 72, true);
-    // appID, appMajor, appMinor, appBuild (4 bytes): zeros (offset 8-11)
-    u8.set([0, 0, 0, 0], 8);
-    // binLogMajor, binLogMinor, binLogBuild, binLogPatch (4 bytes): zeros (offset 12-15)
-    u8.set([0, 0, 0, 0], 12);
-    // fileSize (8 bytes, little-endian, BigUint64): set to totalSize
-    view.setBigUint64(16, BigInt(totalSize), true);
-    // uncompressedSize (8 bytes): also totalSize
-    view.setBigUint64(24, BigInt(totalSize), true);
-    // objectCount (4 bytes): 1
-    view.setUint32(32, 1, true);
-    // objectsRead (4 bytes): 1
-    view.setUint32(36, 1, true);
-    // timeStart (16 bytes): 8 uint16 values.
-    // We choose: [2025, 1, 0, 1, 1, 1, 0, 0]
-    // When unpacked via: const [year, month, , day, hour, minute, second, ms] = timeStart,
-    // this yields a date of: 2025-01-01 01:01:00.000 (local time).
-    const timeStart = [2025, 1, 0, 1, 1, 1, 0, 0]    ;
-    for (let i = 0; i < 8; i++) {
-      view.setUint16(40 + i * 2, timeStart[i], true);
+    view.setBigUint64(16, BigInt(fileSize), true);
+    view.setBigUint64(24, BigInt(fileSize), true);
+    view.setUint32(32, containers.length, true);
+    const systemTime = [2025, 1, 0, 1, 1, 1, 0, milliseconds];
+    systemTime.forEach((value, index) => view.setUint16(40 + index * 2, value, true));
+    let offset = 72;
+    for (const container of containers) {
+        bytes.set(container, offset);
+        offset += container.length;
     }
-    // timeStop (16 bytes): set all to 0.
-    for (let i = 0; i < 8; i++) {
-      view.setUint16(56 + i * 2, 0, true);
-    }
-
-    // --- Segment 2: Object Header (bytes 72-88) ---
-    // This header is read by OBJ_HEADER_BASE_STRUCTunpack.
-    // Write signature "LOBJ" (4 bytes)
-    writeString("LOBJ", 72);
-    // headerSize (2 bytes): 16
-    view.setUint16(76, 16, true);
-    // headerVersion (2 bytes): 1
-    view.setUint16(78, 1, true);
-    // objectSize (4 bytes): outer object size.
-    // We plan for our object content to contain 16 bytes for LOG_CONTAINER_STRUCT
-    // plus 48 bytes for container data (see below) → 16+48 = 64.
-    // Since the object header base is 16 bytes, set objectSize = 16 + 64 = 80.
-    view.setUint32(80, 80, true);
-    // objectType (4 bytes): LOG_CONTAINER (10)
-    view.setUint32(84, 10, true);
-
-    // --- Segment 3: Object Content (bytes 88-152) ---
-    // Object content length = objectSize - 16 = 80 - 16 = 64 bytes.
-    // First 16 bytes: LOG_CONTAINER_STRUCT.
-    // compressionMethod (2 bytes): NO_COMPRESSION (0)
-    view.setUint16(88, 0, true);
-    // 6 bytes of padding (offsets 90-95): zeros.
-    for (let i = 90; i < 96; i++) {
-      u8[i] = 0;
-    }
-    // sizeUncompressed (4 bytes): arbitrary (set to 64)
-    view.setUint32(96, 64, true);
-    // 4 bytes of final padding (offsets 100-103): zeros.
-    for (let i = 100; i < 104; i++) {
-      u8[i] = 0;
-    }
-    // The remaining 48 bytes (offsets 104-152) are containerData.
-    // We'll build one inner object (CAN message) here.
-
-    // --- Inner Object Message (48 bytes total) ---
-    const innerOffset = 104;
-    // Segment A: Inner object header base (16 bytes)
-    // Signature "LOBJ"
-    writeString("LOBJ", innerOffset); // bytes 104-107
-    // headerSize: 16 (2 bytes)
-    view.setUint16(innerOffset + 4, 16, true);
-    // headerVersion: 1 (2 bytes)
-    view.setUint16(innerOffset + 6, 1, true);
-    // objectSize: total inner message size = 16 (header base) + 16 (header V1) + 16 (CAN message) = 48
-    view.setUint32(innerOffset + 8, 48, true);
-    // objectType: CAN_MESSAGE (1)
-    view.setUint32(innerOffset + 12, 1, true);
-
-    // Segment B: Inner header V1 (16 bytes, from offset 120 to 135)
-    const innerV1Offset = 120;
-    // flags (4 bytes): set to 1 so that factor becomes 1e-5
-    view.setUint32(innerV1Offset, 1, true);
-    // clientIndex (2 bytes): 0
-    view.setUint16(innerV1Offset + 4, 0, true);
-    // objectVersion (2 bytes): 1
-    view.setUint16(innerV1Offset + 6, 1, true);
-    // timestamp (8 bytes): set to BigInt(100000)
-    view.setBigUint64(innerV1Offset + 8, BigInt(100000), true);
-
-    // Segment C: CAN message (16 bytes, from offset 136 to 151)
-    const canMsgOffset = 136;
-    // channel (2 bytes): set to 1 (will yield channel 0 after subtracting 1)
-    view.setUint16(canMsgOffset, 1, true);
-    // flags (1 byte): 0 (so isRemoteFrame is false and isRx becomes true)
-    u8[canMsgOffset + 2] = 0;
-    // dlc (1 byte): 4
-    u8[canMsgOffset + 3] = 4;
-    // arbitrationId (4 bytes): set to 0x123 (291 decimal)
-    view.setUint32(canMsgOffset + 4, 0x123, true);
-    // data (8 bytes): first 4 bytes are 0xAA, 0xBB, 0xCC, 0xDD; the remaining bytes can be 0.
-    u8[canMsgOffset + 8] = 0xAA;
-    u8[canMsgOffset + 9] = 0xBB;
-    u8[canMsgOffset + 10] = 0xCC;
-    u8[canMsgOffset + 11] = 0xDD;
-    for (let i = canMsgOffset + 12; i < canMsgOffset + 16; i++) {
-      u8[i] = 0;
-    }
-
-    // --- Fake File Object ---
-    // Our fake file exposes a slice method returning an object with an arrayBuffer() method.
-    const fakeFile = {
-      slice: (start, end) => ({
-        arrayBuffer: async () => buffer.slice(start, end)
-      })
+    return {
+        size: fileSize,
+        slice: (start, end) => ({ arrayBuffer: async () => bytes.buffer.slice(start, end) })
     };
+}
 
-    // Call parseBLF with our fake file.
-    const messages = await parseBLF(fakeFile);
+function classicCanMessage(id, payload) {
+    const data = new Uint8Array(16);
+    const view = new DataView(data.buffer);
+    view.setUint16(0, 1, true);
+    data[3] = payload.length;
+    view.setUint32(4, id, true);
+    data.set(payload, 8);
+    return createInnerObject(1, data, 100000);
+}
 
-    // Compute expected global start timestamp using the same logic as systemTimeToTimestamp.
-    // For timeStart [2025, 1, 0, 1, 1, 0, 0, 0]:
-    // The destructuring in systemTimeToTimestamp is:
-    //   const [year, month, , day, hour, minute, second, milliseconds] = systemTime;
-    // Thus, year=2025, month=1, day=1, hour=1, minute=1, second=0, ms=0.
-    const expectedStart = new Date(2025, 0, 1, 1, 1, 0, 0).getTime() / 1000;
-    // In the inner header, timestamp = 100000 and flags = 1, so factor = 1e-5.
-    // Effective inner message timestamp = 100000 * 1e-5 = 1, plus global start.
-    const expectedTimestamp = expectedStart + 1;
+function canFdMessage(id, payload) {
+    const data = new Uint8Array(84);
+    const view = new DataView(data.buffer);
+    view.setUint16(0, 1, true);
+    data[3] = 9;
+    view.setUint32(4, id, true);
+    view.setUint32(8, 12, true);
+    data[13] = 1;
+    data[14] = payload.length;
+    data.set(payload, 20);
+    return createInnerObject(100, data, 100000);
+}
 
-    const expectedMessage = {
-      timestamp: expectedTimestamp,
-      arbitrationId: 0x123,
-      data: new Uint8Array([0xAA, 0xBB, 0xCC, 0xDD]),
-      channel: 0, // channel 1 becomes 0 after subtracting 1
-      isExtendedId: false,
-      isRemoteFrame: false,
-      isRx: true
-    };
+function canFd64Message(id, payload, extDataOffset = 0) {
+    const data = new Uint8Array(42 + payload.length);
+    const view = new DataView(data.buffer);
+    data[0] = 1;
+    data[1] = 9;
+    data[2] = payload.length;
+    view.setUint32(4, id, true);
+    view.setUint32(8, 12, true);
+    view.setUint32(12, 0x1000, true);
+    data[35] = extDataOffset;
+    data.set(payload, 42);
+    return createInnerObject(101, data, 100000);
+}
 
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toEqual(expectedMessage);
-  });
+function canErrorFrame(id, payload) {
+    const data = new Uint8Array(32);
+    const view = new DataView(data.buffer);
+    view.setUint16(0, 1, true);
+    data[10] = payload.length;
+    view.setUint32(16, id, true);
+    data.set(payload, 24);
+    return createInnerObject(73, data, 100000);
+}
 
-  test('returns empty array for invalid BLF signature', async () => {
-    const buffer = new ArrayBuffer(72);
-    const u8 = new Uint8Array(buffer);
-    // Write an invalid signature "BAD!"
-    u8[0] = 'B'.charCodeAt(0);
-    u8[1] = 'A'.charCodeAt(0);
-    u8[2] = 'D'.charCodeAt(0);
-    u8[3] = '!'.charCodeAt(0);
+describe("parseBLF", () => {
+    test("parses objects across multiple containers, including CAN FD and error frames", async () => {
+        const first = createContainer(classicCanMessage(0x123, [0xAA, 0xBB]));
+        const second = createContainer(new Uint8Array([
+            ...canFdMessage(0x124, [1, 2, 3]),
+            ...canFd64Message(0x125, [4, 5, 6, 7]),
+            ...canErrorFrame(0x126, [8, 9])
+        ]));
+        const messages = await parseBLF(createFile([first, second]));
+        expect(messages).toHaveLength(4);
+        expect(messages.map(message => message.arbitrationId)).toEqual([0x123, 0x124, 0x125, 0x126]);
+        expect(Array.from(messages[0].data)).toEqual([0xAA, 0xBB]);
+        expect(Array.from(messages[1].data)).toEqual([1, 2, 3]);
+        expect(messages[1].isFd).toBe(true);
+        expect(Array.from(messages[2].data)).toEqual([4, 5, 6, 7]);
+        expect(messages[2].isFd).toBe(true);
+        expect(messages[3].isErrorFrame).toBe(true);
+        expect(Array.from(messages[3].data)).toEqual([8, 9]);
+    });
 
-    const fakeFile = {
-      slice: (start, end) => ({
-        arrayBuffer: async () => buffer.slice(start, end)
-      })
-    };
+    test("inflates zlib containers", async () => {
+        const previousPako = globalThis.pako;
+        globalThis.pako = { Inflate };
+        try {
+            const messages = await parseBLF(createFile([
+                createContainer(classicCanMessage(0x321, [0x55]), 2)
+            ]));
+            expect(messages).toHaveLength(1);
+            expect(Array.from(messages[0].data)).toEqual([0x55]);
+        } finally {
+            if (previousPako === undefined) delete globalThis.pako;
+            else globalThis.pako = previousPako;
+        }
+    });
 
-    const messages = await parseBLF(fakeFile);
-    expect(messages).toEqual([]);
-  });
+    test("honors 4-byte padding between BLF objects and containers", async () => {
+        const unalignedObject = createInnerObject(999, new Uint8Array(18));
+        expect(new DataView(unalignedObject.buffer).getUint32(8, true) % 4).toBe(2);
+        const firstContainer = createContainer(unalignedObject, 2);
+        const secondContainer = createContainer(classicCanMessage(0x222, [0x44]));
+        expect(new DataView(firstContainer.buffer).getUint32(8, true) % 4).not.toBe(0);
+
+        const previousPako = globalThis.pako;
+        globalThis.pako = { Inflate };
+        try {
+            const messages = await parseBLF(createFile([firstContainer, secondContainer]));
+            expect(messages).toHaveLength(1);
+            expect(messages[0].arbitrationId).toBe(0x222);
+        } finally {
+            if (previousPako === undefined) delete globalThis.pako;
+            else globalThis.pako = previousPako;
+        }
+    });
+
+    test("uses extDataOffset as the payload boundary and never reads into the next object", async () => {
+        const extendedPayload = canFd64Message(0x125, [4, 5, 6], 77);
+        const valid = await parseBLF(createFile([createContainer(extendedPayload)]));
+        expect(Array.from(valid[0].data)).toEqual([4, 5, 6]);
+
+        const shortPayload = canFd64Message(0x125, [4, 5, 6], 75);
+        const nextMessage = classicCanMessage(0x222, [0x44]);
+        const messages = await parseBLF(createFile([
+            createContainer(new Uint8Array([...shortPayload, ...nextMessage]))
+        ]));
+        expect(Array.from(messages[0].data)).toEqual([4]);
+        expect(messages[1].arbitrationId).toBe(0x222);
+    });
+
+    test("rejects BLF containers that declare excessive decompressed data", async () => {
+        const container = createContainer(new Uint8Array([1]), 2, 256 * 1024 * 1024 + 1);
+        await expect(parseBLF(createFile([container])))
+            .rejects.toThrow("256 MiB safety limit");
+    });
+
+    test("rejects BLF files over the input size limit before reading", async () => {
+        await expect(parseBLF({
+            size: 512 * 1024 * 1024 + 1,
+            slice: () => {
+                throw new Error("Oversized files must be rejected before reading.");
+            }
+        })).rejects.toThrow("512 MiB");
+    });
+
+    test("keeps SYSTEMTIME milliseconds at millisecond precision", async () => {
+        const messages = await parseBLF(createFile([
+            createContainer(classicCanMessage(0x123, [1]))
+        ], 500));
+        expect(messages[0].timestamp).toBe(Date.UTC(2025, 0, 1, 1, 1, 0, 500) / 1000 + 1);
+    });
+
+    test("throws for invalid BLF signatures", async () => {
+        const file = createFile([]);
+        const bytes = await file.slice(0, file.size).arrayBuffer();
+        new Uint8Array(bytes).set([66, 65, 68, 33]);
+        await expect(parseBLF({
+            size: file.size,
+            slice: (start, end) => ({ arrayBuffer: async () => bytes.slice(start, end) })
+        })).rejects.toThrow("Invalid BLF signature");
+    });
 });

@@ -3,11 +3,26 @@ let deltaPointA = null;
 let deltaPointB = null;
 let originalHovermode = null;
 
+function resetDeltaCursor() {
+    deltaModeActive = false;
+    deltaPointA = null;
+    deltaPointB = null;
+    const plotEl = document.getElementById('plot');
+    if (plotEl) {
+        plotEl.removeListener?.('plotly_click', deltaClickHandler);
+        plotEl.style.cursor = 'default';
+        if (originalHovermode) Plotly.relayout(plotEl, { hovermode: originalHovermode });
+    }
+    originalHovermode = null;
+    const deltaOverlay = document.getElementById('delta-overlay');
+    if (deltaOverlay) deltaOverlay.style.display = 'none';
+}
+
 function clearAnnotationsAndShapes() {
     const plotEl = document.getElementById('plot');
     // Clear any previous annotations and shapes when starting a new measurement cycle
     // Preserve axis annotations while removing only delta cursor annotations
-    const preservedAnnotations = plotEl.layout.annotations.filter(ann => !ann.text.startsWith("X: "));
+    const preservedAnnotations = (plotEl.layout.annotations || []).filter(ann => !ann.text?.startsWith("X: "));
     Plotly.relayout(plotEl, { annotations: preservedAnnotations, shapes: [] });
 }
 
@@ -91,28 +106,30 @@ function deltaClickHandler(data) {
         console.log("Point B set at:", deltaPointB);
         addAnnotationAndLines(x, y);
         
-        // Convert timestamp strings to Date objects
-        const timeA = new Date(deltaPointA.x);
-        const timeB = new Date(deltaPointB.x);
-
-        const deltaMs = Math.abs(new Date(Math.max(timeA, timeB)) - new Date(Math.min(timeA, timeB)));
+        const timeA = timestampToMicroseconds(deltaPointA.x);
+        const timeB = timestampToMicroseconds(deltaPointB.x);
 
         // Format ΔX dynamically
         let deltaXFormatted = "";
-        let remainingMs = deltaMs;
-
-        const hours = Math.floor(remainingMs / (60 * 60 * 1000));
-        remainingMs %= (60 * 60 * 1000);
-        const minutes = Math.floor(remainingMs / (60 * 1000));
-        remainingMs %= (60 * 1000);
-        const seconds = Math.floor(remainingMs / 1000);
-        const milliseconds = remainingMs % 1000;
+        let remainingMicroseconds = Math.abs(timeB - timeA);
+        const hours = Math.floor(remainingMicroseconds / 3_600_000_000);
+        remainingMicroseconds %= 3_600_000_000;
+        const minutes = Math.floor(remainingMicroseconds / 60_000_000);
+        remainingMicroseconds %= 60_000_000;
+        const seconds = Math.floor(remainingMicroseconds / 1_000_000);
+        remainingMicroseconds %= 1_000_000;
+        const milliseconds = Math.floor(remainingMicroseconds / 1000);
+        const fractionalMicroseconds = remainingMicroseconds % 1000;
 
         // Build the formatted string dynamically
         if (hours > 0) deltaXFormatted += `${hours}h `;
         if (minutes > 0 || hours > 0) deltaXFormatted += `${minutes}m `;
         if (seconds > 0 || minutes > 0 || hours > 0) deltaXFormatted += `${seconds}s `;
-        if (milliseconds > 0 || (hours === 0 && minutes === 0 && seconds === 0)) deltaXFormatted += `${milliseconds}ms`;
+        if (milliseconds > 0 || fractionalMicroseconds > 0 || (hours === 0 && minutes === 0 && seconds === 0)) {
+            deltaXFormatted += `${milliseconds}${fractionalMicroseconds
+                ? `.${String(fractionalMicroseconds).padStart(3, "0")}`
+                : ""}ms`;
+        }
 
         // Trim any extra spaces
         deltaXFormatted = deltaXFormatted.trim();
@@ -124,28 +141,34 @@ function deltaClickHandler(data) {
         if (!deltaOverlay) {
             deltaOverlay = document.createElement('div');
             deltaOverlay.id = 'delta-overlay';
-            deltaOverlay.style.position = 'absolute';
-            deltaOverlay.style.bottom = '20px';
-            deltaOverlay.style.right = '20px';
-            deltaOverlay.style.background = 'rgba(0,0,0,0.7)';
-            deltaOverlay.style.color = 'white';
-            deltaOverlay.style.padding = '8px 12px';
-            deltaOverlay.style.borderRadius = '5px';
-            deltaOverlay.style.fontSize = '14px';
+            deltaOverlay.classList.add('delta-overlay');
             deltaOverlay.style.display = 'none';
-            document.body.appendChild(deltaOverlay);
+            document.querySelector('.content').appendChild(deltaOverlay);
         }
 
         const deltaY = deltaPointB.x > deltaPointA.x ? deltaPointB.y - deltaPointA.y : deltaPointA.y - deltaPointB.y;
         // Format ΔY to avoid trailing zeros
         const deltaYFormatted = parseFloat(deltaY.toFixed(10)).toString();
-        deltaOverlay.innerHTML = `ΔX: ${deltaXFormatted} | ΔY: ${deltaYFormatted}`;
+        deltaOverlay.textContent = `ΔX: ${deltaXFormatted} | ΔY: ${deltaYFormatted}`;
         deltaOverlay.style.display = 'block';
         
         // Reset for the next measurement cycle
         deltaPointA = null;
         deltaPointB = null;
     }
+}
+
+function timestampToMicroseconds(timestamp) {
+    if (typeof timestamp === "number") return Math.round(timestamp * 1_000_000);
+
+    const epochMilliseconds = Date.parse(timestamp);
+    const fractionalPart = timestamp.match(/\.(\d+)(?:Z|[+-]\d{2}:?\d{2})$/)?.[1];
+    if (!Number.isFinite(epochMilliseconds) || !fractionalPart) {
+        return epochMilliseconds * 1000;
+    }
+    const microseconds = Number((fractionalPart + "000000").slice(0, 6));
+    const parsedMilliseconds = Number((fractionalPart + "000").slice(0, 3));
+    return epochMilliseconds * 1000 + microseconds - parsedMilliseconds * 1000;
 }
 
 // Adds an annotation and dashed gray lines for the given point.

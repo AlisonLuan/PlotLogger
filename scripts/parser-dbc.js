@@ -1,7 +1,7 @@
 /**
  * Converts a numeric message ID to a formatted hexadecimal string.
- * If the highest bit is set, ID is extended and will be formatted as 29 bits,
- * otherwise, it will be formatted as 11 bits.
+ * The highest bit marks an extended ID; otherwise, IDs above 11 bits are
+ * inferred to be extended and retained as 29-bit values.
  * 
  * @param {number} messageId - The message ID to convert.
  * @returns {{ id: string, isExtended: boolean }} - An object containing:
@@ -20,7 +20,7 @@ function formatMessageId(messageId) {
         throw new Error("Invalid messageId: Must be a number.");
     }
 
-    const isExtended = (messageId & EXT_FLAG) !== 0;
+    const isExtended = (messageId & EXT_FLAG) !== 0 || messageId > STD_ID_MASK;
     const truncatedId = isExtended ? (messageId & EXT_ID_MASK) : (messageId & STD_ID_MASK);
 
     const formattedId = `0x${truncatedId.toString(16).toUpperCase().padStart(
@@ -46,6 +46,8 @@ export function parseDBC(content) {
     const valueDescriptions = {};
     const pendingComments = {};
     const pendingSignalComments = {};
+    const pendingMultiplexerRanges = [];
+    const pendingFloatTypes = [];
 
     let currentMessage = null;
 
@@ -73,7 +75,7 @@ export function parseDBC(content) {
             return;
         }
 
-        const signalMatch = line.match(/^SG_\s+(\w+)(?:\s+(M|m(\d+)))?\s*:\s+(\d+)\|(\d+)@([01])([+-])\s*\(\s*([\d.]+)\s*,\s*([-]?\d*\.?\d+)\s*\)\s*\[\s*([-]?\d*\.?\d+)\s*\|\s*([-]?\d*\.?\d+)\s*\]\s*"([^"]*)".*$/);
+        const signalMatch = line.match(/^SG_\s+(\w+)(?:\s+(M|m(\d+)(?:M)?))?\s*:\s+(\d+)\|(\d+)@([01])([+-])\s*\(\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*,\s*([-+]?\d*\.?\d+)\s*\)\s*\[\s*([-+]?\d*\.?\d+)\s*\|\s*([-+]?\d*\.?\d+)\s*\]\s*"([^"]*)".*$/);
 
         if (signalMatch && currentMessage) {
             const signal = {
@@ -90,7 +92,7 @@ export function parseDBC(content) {
                 defaultValue: 0,
             };
 
-            if (signalMatch[2]?.trim() === "M") {
+            if (signalMatch[2]?.endsWith("M")) {
                 signal.isMultiplexer = true;
             }
 
@@ -99,6 +101,13 @@ export function parseDBC(content) {
             }
 
             currentMessage.signals.push(signal);
+            const receiverText = line.match(/"[^"]*"\s+(.+)$/)?.[1];
+            if (receiverText && receiverText !== "Vector__XXX") {
+                signal.receivers = receiverText.split(",")
+                    .map(receiver => receiver.trim())
+                    .filter(receiver => receiver && receiver !== "Vector__XXX");
+                signal.receivers.forEach(receiver => nodes.add(receiver));
+            }
             return;
         }
 
@@ -142,6 +151,68 @@ export function parseDBC(content) {
         messages.push(currentMessage);
     }
 
+    for (const match of content.matchAll(/^\s*VAL_\s+(\d+)\s+(\w+)\s+((?:-?\d+\s+"[^"]*"\s*)+);/gm)) {
+        const { id: messageId } = formatMessageId(match[1]);
+        const pairs = match[3].match(/(-?\d+)\s+"([^"]*)"/g) || [];
+        valueDescriptions[messageId] ||= {};
+        valueDescriptions[messageId][match[2]] = Object.fromEntries(
+            pairs.map(pair => {
+                const [, value, description] = pair.match(/(-?\d+)\s+"([^"]*)"/);
+                return [value, description];
+            })
+        );
+    }
+
+    for (const match of content.matchAll(/^\s*CM_\s+BO_\s+(\d+)\s+"([^"]*)";/gm)) {
+        const { id: messageId } = formatMessageId(match[1]);
+        pendingComments[messageId] = match[2];
+    }
+
+    for (const match of content.matchAll(/^\s*CM_\s+SG_\s+(\d+)\s+(\w+)\s+"([^"]*)";/gm)) {
+        const { id: messageId } = formatMessageId(match[1]);
+        pendingSignalComments[messageId] ||= {};
+        pendingSignalComments[messageId][match[2]] = match[3];
+    }
+
+    for (const match of content.matchAll(/^\s*SG_MUL_VAL_\s+(\d+)\s+(\w+)\s+(\w+)\s+([^;]+);/gm)) {
+        pendingMultiplexerRanges.push({
+            messageId: formatMessageId(match[1]).id,
+            signalName: match[2],
+            multiplexerName: match[3],
+            ranges: match[4].split(",").map(value => {
+                const range = value.trim().match(/^(-?\d+)(?:\s*-\s*(-?\d+))?$/);
+                if (!range) return null;
+                return [Number(range[1]), Number(range[2] ?? range[1])];
+            }).filter(Boolean)
+        });
+    }
+
+    for (const match of content.matchAll(/^\s*SIG_VALTYPE_\s+(\d+)\s+(\w+)\s*:\s*(\d+)\s*;/gm)) {
+        pendingFloatTypes.push({
+            messageId: formatMessageId(match[1]).id,
+            signalName: match[2],
+            type: Number(match[3])
+        });
+    }
+
+    for (const item of pendingMultiplexerRanges) {
+        const signal = messages.find(message => message.id === item.messageId)
+            ?.signals.find(candidate => candidate.name === item.signalName);
+        if (signal) {
+            signal.isMultiplexed = true;
+            signal.multiplexerName = item.multiplexerName;
+            signal.multiplexerRanges = item.ranges;
+        }
+    }
+
+    for (const item of pendingFloatTypes) {
+        const signal = messages.find(message => message.id === item.messageId)
+            ?.signals.find(candidate => candidate.name === item.signalName);
+        if (signal && (item.type === 1 || item.type === 2)) {
+            signal.valueType = item.type === 1 ? "Float32" : "Float64";
+        }
+    }
+
     messages.forEach((msg) => {
         if (pendingComments[msg.id]) {
             msg.description = pendingComments[msg.id];
@@ -165,7 +236,7 @@ export function parseDBC(content) {
                     signal.multiplexerByteOrder = muxSignal.byteOrder;
                 }
             } else {
-                signal.isMultiplexed = false;
+                signal.isMultiplexed = signal.isMultiplexed ?? false;
             }
         });
     });

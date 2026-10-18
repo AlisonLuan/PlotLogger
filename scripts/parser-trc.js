@@ -9,9 +9,12 @@ class TRCFileVersion {
 }
 
 export async function parseTRC(file) {
+    if (file.size > 128 * 1024 * 1024) {
+        throw new RangeError("TRC files larger than 128 MiB are not supported.");
+    }
     const text = await file.text();
     const lines = text.split("\n").map(line => line.trim());
-    let fileVersion = TRCFileVersion.UNKNOWN;
+    let fileVersion = TRCFileVersion.V1_0;
     let startTime = 0;
     let columns = {};
     let messages = [];
@@ -21,6 +24,8 @@ export async function parseTRC(file) {
             return parseMsgV1_0(cols);
         } else if (fileVersion === TRCFileVersion.V1_1) {
             return parseMsgV1_1(cols);
+        } else if (fileVersion === TRCFileVersion.V1_2) {
+            throw new Error("TRC version 1.2 is not supported.");
         } else if (fileVersion === TRCFileVersion.V1_3) {
             return parseMsgV1_3(cols);
         } else if (fileVersion >= TRCFileVersion.V2_0) {
@@ -38,7 +43,7 @@ export async function parseTRC(file) {
         return {
             timestamp: formatTimestamp(parseFloat(cols[1]) / 1000),
             arbitrationId: parseInt(cols[2], 16),
-            isExtendedId: cols[2].length > 3,
+            isExtendedId: parseInt(cols[2], 16) > 0x7FF,
             dlc: parseInt(cols[3]),
             data: cols.slice(4, 4 + parseInt(cols[3])).map(hex => parseInt(hex, 16))
         };
@@ -48,7 +53,7 @@ export async function parseTRC(file) {
         return {
             timestamp: formatTimestamp(parseFloat(cols[1]) / 1000 + startTime),
             arbitrationId: parseInt(cols[3], 16),
-            isExtendedId: cols[3].length > 3,
+            isExtendedId: parseInt(cols[3], 16) > 0x7FF,
             dlc: parseInt(cols[4]),
             data: cols.slice(5, 5 + parseInt(cols[4])).map(hex => parseInt(hex, 16)),
             isRx: cols[2] === "Rx"
@@ -59,8 +64,8 @@ export async function parseTRC(file) {
         return {
             timestamp: formatTimestamp(parseFloat(cols[1]) / 1000 + startTime),
             arbitrationId: parseInt(cols[4], 16),
-            isExtendedId: cols[4].length > 4,
-            channel: parseInt(cols[2]),
+            isExtendedId: parseInt(cols[4], 16) > 0x7FF,
+            channel: parseInt(cols[2]) - 1,
             dlc: parseInt(cols[6]),
             data: cols.slice(7, 7 + parseInt(cols[6])).map(hex => parseInt(hex, 16)),
             isRx: cols[3] === "Rx"
@@ -76,13 +81,15 @@ export async function parseTRC(file) {
         const type = cols[columns["T"]];
         const timestamp = parseFloat(cols[columns["O"]]) / 1000 + startTime;
         const arbitrationId = parseInt(cols[columns["I"]], 16);
-        const isExtendedId = cols[columns["I"]].length > 4;
-        const channel = columns["B"] ? parseInt(cols[columns["B"]]) : 1;
+        const isExtendedId = parseInt(cols[columns["I"]], 16) > 0x7FF;
+        const channel = columns["B"] !== undefined
+            ? parseInt(cols[columns["B"]]) - 1
+            : 0;
         
         let dlc = 0;
-        if (columns["L"]) {
+        if (columns["L"] !== undefined) {
             dlc = parseInt(cols[columns["L"]]);
-        } else if (columns["l"]) {
+        } else if (columns["l"] !== undefined) {
             dlc = parseInt(cols[columns["l"]]);
         } else {
             console.warn("No DLC column found, setting to 0");
@@ -115,6 +122,12 @@ export async function parseTRC(file) {
         if (line.startsWith(";$FILEVERSION")) {
             const version = line.split("=")[1];
             fileVersion = TRCFileVersion["V" + version.replace(".", "_")] || TRCFileVersion.UNKNOWN;
+            if (fileVersion === TRCFileVersion.V1_2) {
+                throw new Error("TRC version 1.2 is not supported.");
+            }
+            if (fileVersion === TRCFileVersion.UNKNOWN) {
+                throw new Error(`Unsupported TRC version: ${version}.`);
+            }
         } else if (line.startsWith(";$STARTTIME")) {
             const baseDate = new Date(Date.UTC(1899, 11, 30, 0, 0, 0, 0)); // UTC base date
             const daysOffset = parseFloat(line.split("=")[1]); // Days offset
@@ -134,9 +147,14 @@ export async function parseTRC(file) {
         timestamp: message.timestamp,           // Timestamp in seconds
         arbitrationId: message.arbitrationId,  // Message ID in decimal
         data: message.data,                    // Raw CAN payload as Uint8Array
-        channel: message.channel || null,      // CAN channel (null if not provided)
+        channel: message.channel ?? null,      // CAN channel (null if not provided)
         isExtendedId: message.isExtendedId,    // Whether the ID is extended
         isRemoteFrame: message.isRemoteFrame || false, // Whether it's a remote frame
-        isRx: message.isRx                     // Whether it's received
+        isRx: message.isRx,                    // Whether it's received
+        ...(message.isFd !== undefined && { isFd: message.isFd }),
+        ...(message.bitrateSwitch !== undefined && { bitrateSwitch: message.bitrateSwitch }),
+        ...(message.errorStateIndicator !== undefined && {
+            errorStateIndicator: message.errorStateIndicator
+        })
     }));    
 }

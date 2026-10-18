@@ -2,6 +2,8 @@ import { parseTRC } from './parser-trc.js';
 import { parseASC } from './parser-asc.js';
 import { parseBLF } from './parser-blf.js';
 
+const MAX_BINARY_LOG_FILE_SIZE = 512 * 1024 * 1024;
+const MAX_TEXT_LOG_FILE_SIZE = 128 * 1024 * 1024;
 
 export let log = null; // Global variable to store the log
 
@@ -11,11 +13,7 @@ export function resetLog() {
 
 // Check if log is not loaded.
 export function isLogLoaded() {
-    if (!log) {
-        return false;
-    } else {
-        return true;
-    }
+    return Array.isArray(log) && log.length > 0;
 }
 
 function selectFileLOG() {
@@ -45,6 +43,11 @@ function selectFileLOG() {
 export async function parseFileLOG(file) {
     try {
         const fileExtension = file.name.split('.').pop().toLowerCase();
+        const maxFileSize = fileExtension === 'blf' ? MAX_BINARY_LOG_FILE_SIZE : MAX_TEXT_LOG_FILE_SIZE;
+        if (file.size > maxFileSize) {
+            const maxSizeMiB = maxFileSize / (1024 * 1024);
+            throw new RangeError(`Log files larger than ${maxSizeMiB} MiB are not supported.`);
+        }
 
         let parsedData;
         document.body.style.cursor = 'wait'; // Switch cursor to wait
@@ -60,13 +63,13 @@ export async function parseFileLOG(file) {
                 parsedData = await parseASC(file); // Handle ASC files
                 break;
             default:
-                alert('Unsupported file format!');
-                return;
+                throw new Error(`Unsupported log file format: .${fileExtension}`);
         }
         return parsedData;
 
     } catch (error) {
         console.error("Error processing the log file:", error);
+        throw error;
     } finally {
         document.body.style.cursor = 'default'; // Revert cursor to default
     }
@@ -77,41 +80,64 @@ export async function parseFileLOG(file) {
  * @param {Array} parsedMessages - Array of parsed CAN messages from parseBLF.
  */
 export function buildUnifiedLog(parsedMessages) {
+    if (!Array.isArray(parsedMessages)) {
+        throw new TypeError("Parsed log data must be an array.");
+    }
 
     resetLog();
 
-    // Iterate over each parsed CAN message
-    parsedMessages.forEach((msg) => {
-        const date = new Date(msg.timestamp * 1000); // Convert timestamp to milliseconds
-        const humanReadableTimestamp = date.toISOString(); // Convert to ISO string
-
+    const unifiedMessages = [];
+    let skippedMessages = 0;
+    for (const msg of parsedMessages) {
+        if (!msg || !Number.isFinite(msg.timestamp) || !Number.isInteger(msg.arbitrationId) ||
+            msg.arbitrationId < 0 || msg.arbitrationId > 0x1FFFFFFF ||
+            (!Array.isArray(msg.data) && !(msg.data instanceof Uint8Array))) {
+            skippedMessages++;
+            continue;
+        }
+        const data = Array.from(msg.data);
+        if (data.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+            skippedMessages++;
+            continue;
+        }
         const unifiedMessage = {
-            timestamp: humanReadableTimestamp, // Human-readable timestamp
+            timestamp: msg.isRelativeTimestamp
+                ? msg.timestamp
+                : timestampToISOString(msg.timestamp),
             id: `0x${msg.arbitrationId.toString(16).toUpperCase()}`, // Hexadecimal ID
-            data: Array.from(msg.data), // Convert Uint8Array to a standard array
-            channel: msg.channel || null, // CAN channel (null if not provided)
+            data,
+            isRelativeTimestamp: msg.isRelativeTimestamp === true,
+            channel: msg.channel ?? null, // CAN channel (null if not provided)
             isExtendedId: msg.isExtendedId, // Extended ID flag
             isRemoteFrame: msg.isRemoteFrame, // Remote frame flag
-            isRx: msg.isRx // Rx flag
+            isRx: msg.isRx, // Rx flag
+            dlc: msg.dlc,
+            isFd: msg.isFd,
+            isErrorFrame: msg.isErrorFrame,
+            bitrateSwitch: msg.bitrateSwitch,
+            errorStateIndicator: msg.errorStateIndicator
         };
 
-        // Add the unified message to the log
-        log.push(unifiedMessage);
-    });
+        unifiedMessages.push(unifiedMessage);
+    }
+    if (skippedMessages > 0) {
+        console.warn(`Skipped ${skippedMessages} invalid CAN message(s) while loading the log.`);
+    }
+    if (unifiedMessages.length === 0 && parsedMessages.length > 0) {
+        throw new TypeError("The log contains no valid CAN messages.");
+    }
+    log.push(...unifiedMessages);
+    return skippedMessages;
 }
 
-/*
-{
-    "log": [
-      {
-        "timestamp": 123456789.123,  // Timestamp in seconds
-        "id": "0x100",             // CAN message ID in hexadecimal
-        "data": [255, 0, 34, 12],  // Raw CAN payload
-        "channel": 1,              // CAN channel (if provided)
-        "isExtendedId": false,     // Whether the ID is extended
-        "isRemoteFrame": false,    // Whether it's a remote frame
-        "isRx": true               // Whether it is a received message
-      }
-    ]
-  }
-*/
+export function timestampToISOString(timestampSeconds) {
+    if (!Number.isFinite(timestampSeconds)) {
+        throw new TypeError("Log message timestamp must be a finite number.");
+    }
+    const wholeSeconds = Math.floor(timestampSeconds);
+    let microseconds = Math.round((timestampSeconds - wholeSeconds) * 1_000_000);
+    const roundedSeconds = wholeSeconds + (microseconds === 1_000_000 ? 1 : 0);
+    if (microseconds === 1_000_000) microseconds = 0;
+    const datePart = new Date(roundedSeconds * 1000).toISOString().slice(0, 19);
+    return `${datePart}.${String(microseconds).padStart(6, '0')}Z`;
+}

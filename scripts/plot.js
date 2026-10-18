@@ -50,16 +50,6 @@ const plotData = {
         }
     },
 
-    addYAxis() {
-        if (this.yAxes.length < 3) {
-            const newYAxis = `y${this.yAxes.length + 1}`;
-            this.yAxes.push(newYAxis);
-            console.log(`Added new Y-axis: ${newYAxis}`);
-        } else {
-            console.warn("Maximum of 3 Y-axes reached.");
-        }
-    },
-
     isYAxisInUse(axis) {
         // Check if any trace has the specified yaxis
         return plotData.traces.some(trace => trace.yaxis === axis);
@@ -232,39 +222,34 @@ function updatePlotLayout(propertyPath, newValue) {
  * Generate a brand new plot on the given HTML container id "plot" 
  * @param {Object[]} data - An array of Plotly trace objects ready for plotting.
  */
-function generatePlot() {
-    // Check if there is an existing plot and clear it
+async function generatePlot() {
     const plotElement = document.getElementById('plot');
-    if (plotElement) {
-        //Plotly.purge(plotElement); // Clear any existing plot
-        Plotly.react(plotElement, [], {}, plotElement.layout);
-    }
-    console.log("plotLayout:", plotLayout);
-
-    // Plot the data using Plotly
-    if (plotData.traces.length > 0) {
-
-        // Pre-truncate trace names to avoid legend overflow
-        plotData.traces.forEach((trace) => {
-            if (trace.name && trace.name.length > 45) {
-                trace.name =
-                    trace.name.substring(0, 30) +
-                    '...' +
-                    trace.name.substring(trace.name.length - 10);
-            }
-        });
-
-
-        Plotly.newPlot('plot', plotData.traces, plotLayout, plotConfiguration);  
-        
-        // Prevent existing cursor annotations to persist in a new plot
-        clearAnnotationsAndShapes();
-        
-        // Show the configuration panel and populate it with the controls
-        displayConfigurationControls(plotData.traces); 
-    } else {
+    if (!plotElement || plotData.traces.length === 0) {
         console.error("No valid data for plotting.");
+        showToast("No matching data found for the selected signals.");
+        return;
     }
+
+    const displayTraces = plotData.traces.map(trace => {
+        const displayTrace = {
+            ...trace,
+            name: trace.name.length > 45
+                ? `${trace.name.substring(0, 30)}...${trace.name.substring(trace.name.length - 10)}`
+                : trace.name,
+        };
+        if (trace.line) displayTrace.line = { ...trace.line };
+        if (trace.marker) displayTrace.marker = { ...trace.marker };
+        return displayTrace;
+    });
+    const usesRelativeTime = displayTraces.every(trace => trace.isRelativeTimestamp === true);
+    plotLayout.xaxis.type = usesRelativeTime ? "linear" : "date";
+    plotLayout.xaxis.title = { text: usesRelativeTime ? "Elapsed time (s)" : "" };
+    resetDeltaCursor();
+    Plotly.purge(plotElement);
+    await Plotly.newPlot(plotElement, displayTraces, plotLayout, plotConfiguration);
+    document.getElementById("plot-empty-state").hidden = true;
+    clearAnnotationsAndShapes();
+    displayConfigurationControls(displayTraces);
 }
 
 
@@ -288,6 +273,7 @@ function updatePlot() {
         }
         trace.type = "scattergl";
         trace.mode = mode;
+        trace.yaxis = plotData.traces[index].yaxis;
         trace.line = { width: parseInt(width), color: color };
         trace.marker = { size: parseInt(markerSize), color: color };
 
@@ -305,67 +291,33 @@ function updatePlot() {
  * Generates a Plotly-ready dataset for a specific signal from appState.rawLog.
  */
 function generatePlotlyDatasets(processedLogs) {
-    // Initialize an array to store the plotly traces
     const traces = [];
-
-    // Loop through each signal in the processed logs
-    for (const signalName in processedLogs) {
-        if (processedLogs.hasOwnProperty(signalName)) {
-            const signalData = processedLogs[signalName];
-            const signalArray = signalData.data;
-            const unit = signalData.unit ? ` (${signalData.unit})` : ""; 
-
-            // Extract data from the signal array
-            const x = signalArray.map(entry => entry.timestamp); // Time (x-axis)
-            const y = signalArray.map(entry => entry.value);     // Value (y-axis)
-
-            if (x.length === 0 || y.length === 0) {
-                console.warn(`No data found for signal "${signalName}".`);
-                showToast(`Warning: No data found for "${signalName}" in the trace file.`);
-                continue; // Skip to the next signal if no data is found
-            }
-
-            // Create a Plotly trace object for each signal
-            const trace = {
-                x: x,
-                y: y,
-                mode: "lines+markers",
-                type: "scattergl",
-                xaxis: 'x',
-                yaxis: 'y',
-                name: `${signalName}${unit}`, // Updated name with unit
-            };
-
-            // Add the trace to the traces array
-            traces.push(trace);
+    processedLogs.forEach(signalData => {
+        const signalArray = signalData.data;
+        const unit = signalData.unit ? ` (${signalData.unit})` : "";
+        if (signalArray.length === 0) {
+            console.warn(`No data found for signal "${signalData.signalName}".`);
+            return;
         }
-    }
-
-    // Return the array of traces
+        traces.push({
+            x: signalArray.map(entry => entry.timestamp),
+            y: signalArray.map(entry => entry.value),
+            mode: "lines+markers",
+            type: "scattergl",
+            xaxis: 'x',
+            yaxis: 'y',
+            name: `${signalData.signalName} (${signalData.messageName})${unit}`,
+            signalName: signalData.signalName,
+            messageId: signalData.messageId,
+            isRelativeTimestamp: signalData.isRelativeTimestamp
+        });
+        if (signalArray.some(entry => entry.description)) {
+            const trace = traces[traces.length - 1];
+            trace.customdata = signalArray.map(entry => entry.description || "");
+            trace.hovertemplate = "%{fullData.name}<br>%{x}<br>%{y}<br>%{customdata}<extra></extra>";
+        }
+    });
     return traces;
-}
-
-function showToast(message) {
-    const toastContainer = document.getElementById("toast-container");
-
-    // Create toast element
-    const toast = document.createElement("div");
-    toast.classList.add("toast");
-    toast.textContent = message;
-
-    // Append toast to container
-    toastContainer.appendChild(toast);
-
-    // Show the toast with animation
-    setTimeout(() => {
-        toast.classList.add("show");
-    }, 10);
-
-    // Remove toast after 3 seconds
-    setTimeout(() => {
-        toast.classList.remove("show");
-        setTimeout(() => toast.remove(), 300);
-    }, 5000);
 }
 
 function resetSubplotLayout() {
@@ -410,7 +362,7 @@ function updateActiveSubplotsStatus() {
     }
 
     // Set all subplots to false without replacing the object reference
-    Object.keys(plotData.activeSubplots).forEach(key => {
+    ["sp1", "sp2", "sp3", "sp4", "sp5"].forEach(key => {
         plotData.activeSubplots[key] = false;
     });
 

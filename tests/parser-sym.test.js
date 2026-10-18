@@ -278,33 +278,6 @@ test('parses multiple messages and checks node creation if applicable', () => {
       expect(parsedData.messages[0].name).toBe('Msg_with-Special_Chars');
   });
 
-  test('applies default values to missing signal properties', () => {
-      //   const content = `
-      //     [TestMsg]
-      //     ID=101h
-      //     Type=Standard
-      //     Len=1
-      //     Sig="IncompleteSignal" 0
-      //   `;
-      // const parsedData = parseSYM(content);
-
-      // expect(parsedData.messages).toHaveLength(1);
-      // expect(parsedData.messages[0].signals).toHaveLength(1);
-
-      // const sig = parsedData.messages[0].signals[0];
-
-      // // Default values if missing
-      // expect(sig.name).toBe('IncompleteSignal');
-      // expect(sig.startBit).toBe(0); // Defaulted to 0 (was missing)
-      // expect(sig.length).toBe(1); // Defaulted to 1 if missing
-      // expect(sig.scaling).toBe(1.0); // Default scale factor
-      // expect(sig.offset).toBe(0.0); // Default offset
-      // expect(sig.units).toBe(''); // Default empty unit
-      // expect(sig.byteOrder).toBe('LittleEndian'); // Assuming Little-Endian is the default
-      // expect(sig.valueType).toBe('Unsigned'); // Assuming unsigned if not specified
-      // expect(sig.valueRange).toEqual([]); // Empty array as default
-  });
-
   test('parses test1.sym and returns the expected messages and signals', () => {
     // load the symbol file
       const content = `
@@ -374,11 +347,16 @@ test('parses multiple messages and checks node creation if applicable', () => {
     expect(msg2.name).toBe('Symbol3');
     expect(msg2.id).toBe('0x222');
     expect(msg2.signals).toHaveLength(2);
+    expect(msg2.signals[0].isMultiplexer).toBe(true);
+    expect(msg2.signals[0].byteOrder).toBe('BigEndian');
+    expect(msg2.signals[1].multiplexerByteOrder).toBe('BigEndian');
+    expect(msg2.signals[1].multiplexerValue).toBe(0x1234);
 
     // --- Message 3 (duplicate name case) ---
     expect(msg3.name).toBe('Symbol3_Copy');
     expect(msg3.id).toBe('0x223');
     expect(msg3.signals).toHaveLength(2);
+    expect(msg3.signals[1].multiplexerValue).toBe(0x1234);
 
     // --- Message 4 ---
     expect(msg4.name).toBe('Symbol2');

@@ -42,6 +42,9 @@ function toggleSidebarContent(configType) {
     }
 }
 
+document.getElementById('fileButton').addEventListener('click', () => toggleSidebarContent('main'));
+document.getElementById('brushButton').addEventListener('click', () => toggleSidebarContent('brush'));
+document.getElementById('gearButton').addEventListener('click', () => toggleSidebarContent('gear'));
 
 
 /******************** Resize Sidebar  ********************/

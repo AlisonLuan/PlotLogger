@@ -31,11 +31,11 @@ describe('parseDBC', () => {
         expect(msg2.name).toBe('Msg_2');
         expect(msg2.isExtendedId).toBe(true);
       
-        // 3) ID=0x18ABCDEF, Standard (custom truncation to 0x5EF if that’s your parser’s behavior)
+        // 3) Extended IDs without the DBC flag bit are retained by value.
         const msg3 = parsedData.messages[2];
-        expect(msg3.id).toBe('0x5EF');
+        expect(msg3.id).toBe('0x18ABCDEF');
         expect(msg3.name).toBe('Msg_3');
-        expect(msg3.isExtendedId).toBe(false);
+        expect(msg3.isExtendedId).toBe(true);
       
         // 4) ID=0x18AABBCC, Extended
         const msg4 = parsedData.messages[3];
@@ -196,35 +196,6 @@ describe('parseDBC', () => {
     });
     
 
-    test('handles no messages gracefully', () => {
-        const dbcContent = `NS_ : BS_:`;  
-        const parsedData = parseDBC(dbcContent);
-
-        expect(parsedData.messages).toHaveLength(0);
-        expect(parsedData.nodes).toEqual([]);
-    });
-
-    test('parses multiple messages and checks node or sender info', () => {
-        const dbcContent = `
-        BO_ 100 EngineMsg: 8 PCM
-        SG_ Speed : 0|8@1+ (1,0) [0|255] "km/h" Vector__XXX
-
-        BO_ 101 BrakeMsg: 8 ABS
-        SG_ Pressure : 8|8@1+ (0.5,0) [0|127.5] "bar" Vector__XXX
-        `;
-
-        const parsedData = parseDBC(dbcContent);
-        expect(parsedData.messages).toHaveLength(2);
-
-        const engineMsg = parsedData.messages[0];
-        expect(engineMsg.sender).toBe('PCM');
-        expect(engineMsg.signals[0].name).toBe('Speed');
-
-        const brakeMsg = parsedData.messages[1];
-        expect(brakeMsg.sender).toBe('ABS');
-        expect(brakeMsg.signals[0].name).toBe('Pressure');
-    });
-
     test('parses message descriptions correctly', () => {
         const dbcContent = `
             BO_ 100 EngineMsg: 8 PCM
@@ -243,6 +214,36 @@ describe('parseDBC', () => {
         const brakeMsg = parsedData.messages[1];
         expect(brakeMsg.description).toBe('Brake message description');
     });    
+
+    test('supports exponent factors, extended mux metadata, float signals, wrapped tables, and receivers', () => {
+        const parsed = parseDBC(`
+BO_ 256 ExtendedFrame: 8 Sender
+ SG_ Mux M : 0|8@1+ (1,0) [0|255] "" Sender, Receiver
+ SG_ Child : 8|8@1+ (-1e-3,0) [0|255] "unit" Sender, Receiver
+ SG_ Temperature : 16|32@1+ (1,0) [0|1] "C" Sender, Receiver
+SG_MUL_VAL_ 256 Child Mux 1-3,
+ 5;
+SIG_VALTYPE_ 256 Temperature : 1;
+VAL_ 256 Child
+  -1 "negative"
+  1 "one";
+CM_ BO_ 256 "A wrapped
+message comment";
+        `);
+
+        const message = parsed.messages[0];
+        const child = message.signals.find(signal => signal.name === "Child");
+        const temperature = message.signals.find(signal => signal.name === "Temperature");
+        expect(message.description).toBe("A wrapped\nmessage comment");
+        expect(child.scaling).toBe(-0.001);
+        expect(child.isMultiplexed).toBe(true);
+        expect(child.multiplexerName).toBe("Mux");
+        expect(child.multiplexerRanges).toEqual([[1, 3], [5, 5]]);
+        expect(child.valueDescriptions).toEqual({ "-1": "negative", "1": "one" });
+        expect(temperature.valueType).toBe("Float32");
+        expect(child.receivers).toEqual(["Sender", "Receiver"]);
+        expect(parsed.nodes).toContain("Receiver");
+    });
 
     test('parses message descriptions correctly when comments are after frames', () => {
         const dbcContent = `

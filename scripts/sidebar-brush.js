@@ -15,7 +15,7 @@ function displayConfigurationControls(data) {
         lineConfig.innerHTML = `
         <!-- Signal Name with Dynamic Color -->
         <label>
-            <span class="signal-name" data-index="${index}" style="color:#000; font-weight: bold;">${trace.name}</span>
+            <span class="signal-name" data-index="${index}" style="color:#000; font-weight: bold;"></span>
         </label>
     
         <!-- Trace Color Picker (Color Swatches) -->
@@ -67,22 +67,24 @@ function displayConfigurationControls(data) {
             <div class="group-container">
                 <!-- Label and Span container -->
                 <div class="label-span-container">
-                    <label for="lineWidth">Line Width:</label>
+                    <label>Line Width:
                     <span class="line-width-value">${lineWidth}</span>
+                    </label>
                 </div>
                 <!-- Range container -->
-                <input type="range" id="lineWidth" class="line-width" data-index="${index}" min="1" max="10" value="${lineWidth}" />
+                <input type="range" class="line-width" data-index="${index}" min="1" max="10" value="${lineWidth}" />
             </div>
         
             <!-- Second group (Marker Size) -->
             <div class="group-container">
                 <!-- Label and Span container -->
                 <div class="label-span-container">
-                    <label for="markerSize">Marker Size:</label>
+                    <label>Marker Size:
                     <span class="marker-size-value">${markerSize}</span>
+                    </label>
                 </div>
                 <!-- Range container -->
-                <input type="range" id="markerSize" class="marker-size" data-index="${index}" min="1" max="10" value="${markerSize}" />
+                <input type="range" class="marker-size" data-index="${index}" min="1" max="10" value="${markerSize}" />
             </div>
         </div>
 
@@ -111,6 +113,12 @@ function displayConfigurationControls(data) {
         </div>
         `;
         configContainer.appendChild(lineConfig);
+        lineConfig.querySelector('.signal-name').textContent = trace.name;
+        lineConfig.querySelector('.y-axis-selector').value = assignedYAxis === "y" ? "y1" : assignedYAxis;
+        lineConfig.querySelector('.subplot-selector').value = trace.yaxis?.endsWith("0")
+            ? `sp${trace.yaxis.slice(1, -1)}`
+            : "sp1";
+        lineConfig.querySelector('.y-axis-selector').disabled = lineConfig.querySelector('.subplot-selector').value !== "sp1";
     });
 }
 

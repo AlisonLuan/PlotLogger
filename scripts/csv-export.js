@@ -1,71 +1,73 @@
-/**
- * Generates and downloads a CSV from the provided Plotly traces.
- * Each row is "Time, trace1, trace2, ...", with missing values left blank.
- * @param {Array} traces - Array of Plotly traces, each containing x, y, and name.
- */
-export function downloadTracesAsCSV(traces) {
-    
-    if (!traces || traces.length === 0) {
-      console.warn("No traces found. CSV generation skipped.");
-      showToast("No traces available. Please plot a graph before exporting.");
-      return;
-    }
-  
-    // 1) Collect all unique time points from every trace
-    const allTimes = new Set();
-    traces.forEach(trace => {
-      trace.x.forEach(time => allTimes.add(time));
-    });
-    // Sort times (assumes numeric or date-like; adjust if needed)
-    const sortedTimes = Array.from(allTimes)
-    .map(t => new Date(t).getTime()) // Convert to numeric timestamps
-    .sort((a, b) => a - b)
-    .map(t => new Date(t).toISOString()); // Convert back to string format
-
-    // 2) Build a map of time -> { traceIndex -> value }
-    //    This way we can assemble rows easily
-    const dataMap = new Map(); // key: time, value: object with traceIndex -> data
-    traces.forEach((trace, traceIndex) => {
-      trace.x.forEach((timeVal, i) => {
-        const val = trace.y[i];
-        if (!dataMap.has(timeVal)) {
-          dataMap.set(timeVal, {});
+function canonicalTime(time, isRelativeTimestamp) {
+    if (isRelativeTimestamp) {
+        if (typeof time !== "number" || !Number.isFinite(time)) {
+            throw new TypeError("Relative trace timestamps must be finite seconds.");
         }
-        dataMap.get(timeVal)[traceIndex] = val;
-      });
-    });
-  
-    // 3) Build CSV header: "Time, traceName1, traceName2, ... "
-    const header = ["Time", ...traces.map(t => t.name)];
-    let csvString = header.join(",") + "\n";
-  
-    // 4) Fill CSV rows, using sorted time points
-    for (const t of sortedTimes) {
-        const rowObj = dataMap.get(t) || {};
-        //const rowData = [t];  ISO 8601 timestamps
-        //const rowData = [t.replace("T", " ").replace("Z", "")]; // Convert to "YYYY-MM-DD HH:MM:SS.sss"
-        const rowData = [excelSerialNumber(t)]; // Excel serial numbers (days since 1900-01-01)
+        return time.toFixed(6);
+    }
+    if (!(time instanceof Date) && typeof time !== "string" &&
+        !(typeof time === "number" && Number.isFinite(time))) {
+        throw new TypeError("Trace timestamps must be date strings, Date objects, or epoch milliseconds.");
+    }
+    const date = time instanceof Date ? time : new Date(time);
+    const iso = date.toISOString();
+    const sourceFraction = typeof time === "string"
+        ? time.match(/\.(\d+)(?:Z|[+-]\d{2}:?\d{2})$/)?.[1]
+        : null;
+    const fraction = (sourceFraction || iso.slice(20, 23)).slice(0, 6).padEnd(6, "0");
+    return `${iso.slice(0, 19)}.${fraction}Z`;
+}
 
-        traces.forEach((_, i) => {
-            rowData.push(rowObj[i] !== undefined ? rowObj[i] : "");
+function quoteCsv(value) {
+    const text = String(value ?? "");
+    return `"${text.replace(/"/g, '""')}"`;
+}
+
+export function formatTracesAsCSV(traces) {
+    if (!Array.isArray(traces) || traces.length === 0) return "";
+
+    const relativeTraceCount = traces.filter(trace => trace.isRelativeTimestamp === true).length;
+    if (relativeTraceCount > 0 && relativeTraceCount !== traces.length) {
+        throw new TypeError("All traces must use the same timestamp domain.");
+    }
+    const isRelativeTimestamp = relativeTraceCount === traces.length;
+    const valuesByTime = new Map();
+    for (const [traceIndex, trace] of traces.entries()) {
+        if (!Array.isArray(trace.x) || !Array.isArray(trace.y) || trace.x.length !== trace.y.length) {
+            throw new TypeError(`Trace ${traceIndex} must have matching x and y arrays.`);
+        }
+        trace.x.forEach((time, pointIndex) => {
+            const key = canonicalTime(time, isRelativeTimestamp);
+            if (!valuesByTime.has(key)) valuesByTime.set(key, new Map());
+            valuesByTime.get(key).set(traceIndex, trace.y[pointIndex]);
         });
-    
-        csvString += rowData.join(",") + "\n";
     }
 
-    // 5) Trigger file download in browser
-    const blob = new Blob([csvString], { type: "text/csv" });
+    const times = Array.from(valuesByTime.keys()).sort(
+        isRelativeTimestamp ? (left, right) => Number(left) - Number(right) : undefined
+    );
+    const rows = [[ isRelativeTimestamp ? "Elapsed time (s)" : "Time", ...traces.map(trace => trace.name) ]];
+    for (const time of times) {
+        const values = valuesByTime.get(time);
+        rows.push([time, ...traces.map((_, index) => values.get(index) ?? "")]);
+    }
+    return rows.map(row => row.map(quoteCsv).join(",")).join("\r\n") + "\r\n";
+}
+
+export function downloadTracesAsCSV(traces) {
+    if (!traces || traces.length === 0) {
+        console.warn("No traces found. CSV generation skipped.");
+        window.showToast?.("No traces available. Please plot a graph before exporting.");
+        return;
+    }
+
+    const blob = new Blob([formatTracesAsCSV(traces)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = "traces.csv";
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-}
-
-function excelSerialNumber(dateString) {
-    const dt = new Date(dateString);
-    return (dt.getTime() / 86400000) + 25569; // Convert ms to days & adjust for Excel
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
 }

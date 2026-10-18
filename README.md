@@ -1,45 +1,38 @@
-This web application generates dynamic graphs to visualize signals recorded over CAN communication within a network. The graph is produced using two key user-provided inputs:
-— a database file, of formats .sym or .dbc, and
-- a log file, of formats .asc, .trc. or .blf
-Along with additional parameters entered through the user interface.
+# PlotLogger
 
-Core Functionality
-	1.	Data Ingestion and Parsing
-	•	The application accepts two files: a database and a log.
-	•	It supports multiple file formats for both databases and logs by parsing and converting the data into a standardized dataset.
-	•	The original files remain unmodified; only the derived dataset changes based on user input.
-	2.	Graph Generation
-	•	The parsed data and additional user inputs are combined to create a visual representation of the signal data.
-	•	The graph dynamically reflects the selected signals from the database and the corresponding log data.
+PlotLogger is a browser-based CAN log signal plotter. Load a DBC or SYM database and an ASC, TRC, or BLF log, select signals, and inspect them in an interactive Plotly chart. Files are parsed locally in your browser and are not uploaded.
 
-User Interface and Interaction
-	•	Centralized UI Control:
-The application’s user interactions are as follows:
-	•	File Upload and Signal Selection:
-	•	Users begin by uploading the database and log files.
-	•	The interface is then populated with available signals, which users can filter and select using checkboxes.
-	•	Graph Customization and Navigation:
-	•	After generating the graph, users can further customize its appearance (e.g., changing line colors, adjusting axis scales, and reassigning axes) through a dedicated “brush” sidebar.
-	•	The application also offers dynamic navigation options such as zooming and panning for detailed data exploration.
+## Run the application
 
-Future Scalability
+The app uses JavaScript modules, so serve the repository over HTTP rather than opening `index.html` directly:
 
-The application is designed to grow and adapt with future enhancements, including:
-	•	Additional File Formats:
-Supporting a wider range of formats for both database and log files.
-	•	Expanded Customization:
-Introducing more graph customization options to meet diverse user requirements.
-	•	Multi-Graph Support:
-Allowing users to generate and view multiple graphs simultaneously, enabling split-screen functionality.
+```powershell
+python -m http.server 8000
+```
 
+Open <http://localhost:8000> in a browser. Plotly and the BLF inflater are served from the repository; `npm install` is only needed to run the test suite.
 
-# logplotter
-Visual representation for logged CAN bus communication
+## Run tests
 
+```powershell
+npm test
+```
 
-npm install --save-dev jest
-npm install --save-dev @babel/preset-env @babel/preset-typescript babel-jest
-npm install --save-dev jest-environment-jsdom
+## Supported formats
 
-To install the dependencies, run on console:
-npm install
+- Databases: DBC and SYM
+- Logs: ASC, TRC, and BLF
+- BLF: classic CAN, CAN FD, CAN error frames, zlib-compressed containers, and multiple containers
+- TRC 1.2 is explicitly rejected; other TRC versions are parsed according to their supported layouts
+- ASC CAN FD records are skipped; classic data and remote frames are parsed
+- Absolute ASC date lines are interpreted as UTC to keep timestamps consistent across formats
+- Log channels are normalized to zero-based indices across ASC, TRC, and BLF
+- Text logs and databases are limited to 128 MiB; BLF files to 512 MiB, with a 256 MiB per-container and 512 MiB total decompressed-data limit
+- Relative ASC timestamps are plotted and exported as elapsed seconds instead of misleading 1970 calendar dates
+
+## Known limitations
+
+- TRC 1.2 is not supported; ASC CAN FD records are skipped.
+- Parsing and plotting run on the main browser thread, so large accepted files can take time to load or plot.
+- The delta cursor supports only the main subplot and primary Y axis; gear-panel limits apply to the three main Y axes, not subplot-specific axes.
+- Integer signal samples outside JavaScript's exact integer range are skipped with a console warning rather than plotted with rounded values.
