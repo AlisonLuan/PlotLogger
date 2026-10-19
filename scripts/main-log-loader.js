@@ -126,7 +126,10 @@ export function buildUnifiedLog(parsedMessages) {
     if (unifiedMessages.length === 0 && parsedMessages.length > 0) {
         throw new TypeError("The log contains no valid CAN messages.");
     }
-    log.push(...unifiedMessages);
+    // Avoid log.push(...unifiedMessages): spreading a large array into arguments overflows the call stack.
+    for (const unifiedMessage of unifiedMessages) {
+        log.push(unifiedMessage);
+    }
     return skippedMessages;
 }
 
