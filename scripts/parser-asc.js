@@ -1,15 +1,12 @@
+import { readTrimmedLines } from './text-lines.js';
+
 export async function parseASC(file) {
-    if (file.size > 128 * 1024 * 1024) {
-        throw new RangeError("ASC files larger than 128 MiB are not supported.");
-    }
-    const text = await file.text();
-    const lines = text.split('\n').map(line => line.trim());
     let messages = [];
     let startTime = 0;
     let relativeTimestamp = true;
     let base = 16; // Default to hex
 
-    for (let line of lines) {
+    for await (const line of readTrimmedLines(file)) {
         if (line.startsWith("date ")) {
             startTime = parseDate(line.split("date ")[1]);
             continue;

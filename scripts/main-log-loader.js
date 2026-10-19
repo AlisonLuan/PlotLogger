@@ -3,7 +3,7 @@ import { parseASC } from './parser-asc.js';
 import { parseBLF } from './parser-blf.js';
 
 const MAX_BINARY_LOG_FILE_SIZE = 512 * 1024 * 1024;
-const MAX_TEXT_LOG_FILE_SIZE = 128 * 1024 * 1024;
+const MAX_TEXT_LOG_FILE_SIZE = 1024 * 1024 * 1024;
 
 export let log = null; // Global variable to store the log
 

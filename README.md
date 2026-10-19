@@ -27,7 +27,7 @@ npm test
 - ASC CAN FD records are skipped; classic data and remote frames are parsed
 - Absolute ASC date lines are interpreted as UTC to keep timestamps consistent across formats
 - Log channels are normalized to zero-based indices across ASC, TRC, and BLF
-- Text logs and databases are limited to 128 MiB; BLF files to 512 MiB, with a 256 MiB per-container and 512 MiB total decompressed-data limit
+- Text logs (TRC/ASC, streamed line by line) are limited to 1 GiB and databases to 128 MiB; BLF files to 512 MiB, with a 256 MiB per-container and 512 MiB total decompressed-data limit
 - Relative ASC timestamps are plotted and exported as elapsed seconds instead of misleading 1970 calendar dates
 
 ## Known limitations

@@ -1,3 +1,5 @@
+import { readTrimmedLines } from './text-lines.js';
+
 class TRCFileVersion {
     static UNKNOWN = 0;
     static V1_0 = 100;
@@ -9,11 +11,6 @@ class TRCFileVersion {
 }
 
 export async function parseTRC(file) {
-    if (file.size > 128 * 1024 * 1024) {
-        throw new RangeError("TRC files larger than 128 MiB are not supported.");
-    }
-    const text = await file.text();
-    const lines = text.split("\n").map(line => line.trim());
     let fileVersion = TRCFileVersion.V1_0;
     let startTime = 0;
     let columns = {};
@@ -118,7 +115,7 @@ export async function parseTRC(file) {
         };
     }    
 
-    for (let line of lines) {
+    for await (const line of readTrimmedLines(file)) {
         if (line.startsWith(";$FILEVERSION")) {
             const version = line.split("=")[1];
             fileVersion = TRCFileVersion["V" + version.replace(".", "_")] || TRCFileVersion.UNKNOWN;
