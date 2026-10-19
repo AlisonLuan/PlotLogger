@@ -162,3 +162,14 @@
   .feature-list li strong {
       color: #1e3a8a;
   }
+
+.navbar .app-rev {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #fff;
+  padding-right: 16px;
+  font-size: 12px;
+  opacity: 0.7;
+}
