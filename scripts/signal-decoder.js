@@ -1,6 +1,6 @@
 import { extractRawValue } from "./helper.js";
 
-function frameKey(id, isExtendedId) {
+export function frameKey(id, isExtendedId) {
     return `${parseInt(id, 16)}:${Boolean(isExtendedId)}`;
 }
 
@@ -59,6 +59,7 @@ export function processSelectedSignals(selectedSignals, log, database) {
         framesById.get(key).push(message);
     }
 
+    const isRelativeTimestamp = log.length > 0 && log.every(message => message.isRelativeTimestamp === true);
     const processedLogs = [];
     for (const { signalName, messageId } of selectedSignals) {
         const signal = findSignalInDatabase(database, signalName, messageId);
@@ -121,7 +122,7 @@ export function processSelectedSignals(selectedSignals, log, database) {
             messageName: signal.messageName,
             messageId: signal.messageId,
             data: series,
-            isRelativeTimestamp: log.length > 0 && log.every(message => message.isRelativeTimestamp === true),
+            isRelativeTimestamp,
             unit: sanitizeUnit(signal.unit || ""),
             valueDescriptions: signal.valueDescriptions || {}
         });

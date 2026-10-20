@@ -1,4 +1,5 @@
 import databaseHandler from "./main-db-loader.js";
+import { isFrameInLog, isLogLoaded } from "./main-log-loader.js";
 
 /**
 * Helper function to populate a list of checkboxes.
@@ -108,42 +109,30 @@ function populateSignals(database) {
     // Clear existing content
     checkboxGroup.innerHTML = '';
     const allSignals = new Map();
+    const onlyAvailable = isAvailableOnlyEnabled();
+    const addMessage = message => {
+      if (onlyAvailable && !isFrameInLog(message.id, message.isExtendedId ?? false)) return;
+      message.signals.forEach(signal => {
+        allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name, signal });
+      });
+    };
   
     if (selectedSources.length === 0) {
       // If no sources are selected, display all signals from all messages
-      database.messages.forEach(message => {
-        message.signals.forEach(signal => {
-          allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name });
-        });
-      });
+      database.messages.forEach(addMessage);
     } else {
       // Filter signals based on the selected filter option
       const filterType = document.getElementById('filterOptions').value;
-      selectedSources.forEach(source => {
-        if (filterType === 'filterById') {
-          const message = database.messages.find(msg => msg.id === source.messageId);
-          if (message) {
-            message.signals.forEach(signal => {
-              allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name });
-            });
-          }
-        } else if (filterType === 'filterByName') {
-          const message = database.messages.find(msg => msg.id === source.messageId && msg.name === source.messageName);
-          if (message) {
-            message.signals.forEach(signal => {
-              allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name });
-            });
-          }
-        } else if (filterType === 'filterBySender') {
-          database.messages
-            .filter(msg => msg.sender === source.value)
-            .forEach(message => {
-              message.signals.forEach(signal => {
-                allSignals.set(signalKey(message.id, signal.name), { signalName: signal.name, messageId: message.id, messageName: message.name });
-              });
-            });
-        }
-      });
+      if (filterType === 'filterById') {
+        const ids = new Set(selectedSources.map(source => source.messageId));
+        database.messages.forEach(message => { if (ids.has(message.id)) addMessage(message); });
+      } else if (filterType === 'filterByName') {
+        const keys = new Set(selectedSources.map(source => JSON.stringify([source.messageId, source.messageName])));
+        database.messages.forEach(message => { if (keys.has(JSON.stringify([message.id, message.name]))) addMessage(message); });
+      } else if (filterType === 'filterBySender') {
+        const senders = new Set(selectedSources.map(source => source.value));
+        database.messages.forEach(message => { if (senders.has(message.sender)) addMessage(message); });
+      }
     }
   
     // Convert the set to an array and sort it
@@ -151,12 +140,11 @@ function populateSignals(database) {
       .sort((a, b) => `${a.signalName} (${a.messageName})`.localeCompare(`${b.signalName} (${b.messageName})`));
   
     if (sortedSignals.length > 0) {
-      checkboxGroup.replaceChildren();
-      sortedSignals.forEach(({ signalName, messageId, messageName }) => {
+      const fragment = document.createDocumentFragment();
+      sortedSignals.forEach(({ signalName, messageId, messageName, signal }) => {
         const label = document.createElement('label');
         const checkbox = document.createElement('input');
         const key = signalKey(messageId, signalName);
-        const signal = database.messages.find(item => item.id === messageId)?.signals.find(item => item.name === signalName);
         checkbox.type = 'checkbox';
         checkbox.value = key;
         checkbox.dataset.signalName = signalName;
@@ -171,12 +159,31 @@ function populateSignals(database) {
           if (event.target.checked) selectedSignals.add(key);
           else selectedSignals.delete(key);
         });
-        checkboxGroup.appendChild(label);
+        fragment.appendChild(label);
       });
+      checkboxGroup.replaceChildren(fragment);
     } else {
-      checkboxGroup.innerHTML = `<p>No signals available for the selected sources.</p>`;
+      checkboxGroup.innerHTML = onlyAvailable
+        ? `<p>No signals from the selected sources are present in the loaded trace.</p>`
+        : `<p>No signals available for the selected sources.</p>`;
     }
   }
+
+function isAvailableOnlyEnabled() {
+  const checkbox = document.getElementById('availableSignalsOnly');
+  return Boolean(checkbox && checkbox.checked && !checkbox.disabled && isLogLoaded());
+}
+
+/** Enables the "available signals only" checkbox only while a trace is loaded. */
+function updateAvailableOnlyCheckbox() {
+  const checkbox = document.getElementById('availableSignalsOnly');
+  if (!checkbox) return;
+  const loaded = isLogLoaded();
+  checkbox.disabled = !loaded;
+  const label = checkbox.closest('label');
+  label?.classList.toggle('disabled', !loaded);
+  if (label) label.title = loaded ? 'Hide signals whose frames are not in the loaded trace' : 'Requires a loaded trace';
+}
   
   
 
@@ -265,6 +272,7 @@ function handleFilterOptionsScroll(event) {
 }
 
 export { populateSignals }; // Export if used in other modules
+export { updateAvailableOnlyCheckbox };
 export { populateCheckboxGroup }; // Export if used in other modules
 export { handleFilterOptionsScroll }; // Export if used in other modules
 export { updateButtonColor }; // Export if used in other modules

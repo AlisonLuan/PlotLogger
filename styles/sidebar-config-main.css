@@ -60,6 +60,17 @@ select {
 }
 
 /* checkboxes */
+.available-only-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.available-only-label.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .checkbox-container {
     /*min-height: 150px;/**/
     height: clamp(150px, 50vh, 100vh); /* Limit height to 50vh */

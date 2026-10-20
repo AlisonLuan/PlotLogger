@@ -1,14 +1,23 @@
 import { parseTRC } from './parser-trc.js';
 import { parseASC } from './parser-asc.js';
 import { parseBLF } from './parser-blf.js';
+import { frameKey } from './signal-decoder.js';
 
 const MAX_BINARY_LOG_FILE_SIZE = 512 * 1024 * 1024;
 const MAX_TEXT_LOG_FILE_SIZE = 1024 * 1024 * 1024;
 
 export let log = null; // Global variable to store the log
 
+// Frame keys present in the log, filled while building the log so lookups are O(1).
+let availableFrameKeys = new Set();
+
 export function resetLog() {
     log = [];
+    availableFrameKeys = new Set();
+}
+
+export function isFrameInLog(id, isExtendedId) {
+    return availableFrameKeys.has(frameKey(id, isExtendedId));
 }
 
 // Check if log is not loaded.
@@ -129,6 +138,9 @@ export function buildUnifiedLog(parsedMessages) {
     // Avoid log.push(...unifiedMessages): spreading a large array into arguments overflows the call stack.
     for (const unifiedMessage of unifiedMessages) {
         log.push(unifiedMessage);
+        if (!unifiedMessage.isRemoteFrame && !unifiedMessage.isErrorFrame) {
+            availableFrameKeys.add(frameKey(unifiedMessage.id, unifiedMessage.isExtendedId));
+        }
     }
     return skippedMessages;
 }

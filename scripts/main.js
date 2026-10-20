@@ -9,6 +9,13 @@ import {processSelectedSignals as decodeSelectedSignals} from "./signal-decoder.
 import {handleFilterOptionsScroll, clearSelectedSignals} from "./sidebar-main.js";
 import {populateCheckboxGroup} from "./sidebar-main.js";
 import {populateSignals} from "./sidebar-main.js";
+import {updateAvailableOnlyCheckbox} from "./sidebar-main.js";
+
+// Syncs the checkbox with the trace state and refreshes the signal list if a database is loaded.
+function refreshAvailableSignals() {
+    updateAvailableOnlyCheckbox();
+    if (databaseHandler.isDatabaseLoaded()) populateSignals(databaseHandler.getDatabase());
+}
 
 let databaseLoadGeneration = 0;
 let logLoadGeneration = 0;
@@ -153,6 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("PlotButton").disabled = true;
         clearCurrentPlot();
         resetLog();
+        refreshAvailableSignals();
         logDropArea.classList.remove("active");
         dropText.textContent = "Loading File...";
         try {
@@ -171,6 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Update the drop zone text with the selected file name and change layout
                 dropText.textContent = file.name;
                 logDropArea.classList.add("active");
+                refreshAvailableSignals();
 
                 if(databaseHandler.isDatabaseLoaded()){
                     // Enable the "Generate Plot" button
@@ -180,6 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Error loading log:", error);
             if (generation === logLoadGeneration) {
                 resetLog();
+                refreshAvailableSignals();
                 dropText.textContent = "Load your Log here.";
                 logDropArea.classList.remove("active");
                 document.getElementById("PlotButton").disabled = true;
@@ -274,6 +284,9 @@ document.getElementById('filterOptions').addEventListener('change', function () 
 });
 
 /******************** Checkbox Signals ********************/
+document.getElementById('availableSignalsOnly').addEventListener('change', () => {
+    if (databaseHandler.isDatabaseLoaded()) populateSignals(databaseHandler.getDatabase());
+});
 // Event listener for changes in the checkbox-sources
 document.querySelector('#checkbox-sources .checkbox-group').addEventListener('change', function (event) {
     if (event.target.tagName === 'INPUT' && event.target.type === 'checkbox') {

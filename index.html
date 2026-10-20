@@ -17,7 +17,7 @@
     <nav class="navbar">
         <a href="index.html">CAN Log Plotter</a>
         <a href="shortcuts.html">Shortcuts</a>
-        <span id="appRev" class="app-rev" title="Bump this on every change to confirm the browser loaded the latest build">rev 2026-10-19.1 (streaming logs)</span>
+        <span id="appRev" class="app-rev">Build</span>
     </nav>
     
     <!-- Small static sidebar on the left side. Not affected by interface events -->
@@ -70,6 +70,10 @@
                         </div>
                     </div>
                     <div id="resizeHandleSources"></div>
+                    <label class="available-only-label" title="Requires a loaded trace">
+                        <input type="checkbox" id="availableSignalsOnly" disabled>
+                        Show only available signals
+                    </label>
                     <div class="checkbox-container" id="checkbox-signals" role="group" aria-label="Filter signals">
                         <p>Filter Signals</p>
                         <div class="checkbox-group">
@@ -133,6 +137,7 @@
     
     <!-- Scripts: Database -->
     <!-- Scripts: User Interface -->
+    <script src="scripts/app-rev.js"></script>
     <script type="module" src="scripts/main.js"></script>
     <script src="scripts/sidebar.js"></script>
     <script src="scripts/sidebar-brush.js"></script>
