@@ -36,3 +36,7 @@ npm test
 - Parsing and plotting run on the main browser thread, so large accepted files can take time to load or plot.
 - The delta cursor supports only the main subplot and primary Y axis; gear-panel limits apply to the three main Y axes, not subplot-specific axes.
 - Integer signal samples outside JavaScript's exact integer range are skipped with a console warning rather than plotted with rounded values.
+
+## Shortcuts
+
+The Shortcuts link opens the shortcuts page in an in-page dialog, so loaded data and plots are preserved. Ctrl-click (or middle-click) opens it in a new tab instead.

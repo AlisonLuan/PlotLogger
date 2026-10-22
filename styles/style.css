@@ -173,3 +173,9 @@
   font-size: 12px;
   opacity: 0.7;
 }
+
+
+/* Shortcuts page shown inside the plotter dialog */
+html.embedded body {
+    padding-top: 0;
+}

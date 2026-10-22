@@ -1,4 +1,10 @@
 document.addEventListener("DOMContentLoaded", function () {
+    if (new URLSearchParams(window.location.search).get("embedded") === "1") {
+        document.getElementById("navbar-container").hidden = true;
+        document.body.style.paddingTop = "0";
+        return;
+    }
+
     let basePath = window.location.pathname.includes("/app/") ? "../" : "";
 
     // Define the navbar HTML directly in JS (avoids fetching delays)
