@@ -10,11 +10,12 @@ The app uses JavaScript modules, so serve the repository over HTTP rather than o
 python -m http.server 8000
 ```
 
-Open <http://localhost:8000> in a browser. Plotly and the BLF inflater are served from the repository; `npm install` is only needed to run the test suite.
+Open <http://localhost:8000> in a browser. Plotly and the BLF inflater are served from the repository; Node.js and npm are only needed to run the test suite.
 
 ## Run tests
 
 ```powershell
+npm ci
 npm test
 ```
 
