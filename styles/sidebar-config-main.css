@@ -144,3 +144,75 @@ select {
     cursor: not-allowed; /* Indicate it's disabled */
     opacity: 0.6; /* Reduce opacity */
 }
+/* Generate database from log */
+.generate-db-actions {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.generate-db-actions button,
+#generateDbDialog button {
+    padding: 8px 10px;
+    border: 1px solid hsl(214.3, 60%, 60%);
+    border-radius: 6px;
+    background: hsl(214.3, 60%, 92%);
+    color: #1e3a8a;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.generate-db-actions button:first-child {
+    flex: 1;
+}
+
+.generate-db-actions button:hover:not(:disabled),
+#generateDbDialog button:hover {
+    background: hsl(214.3, 60%, 85%);
+}
+
+.generate-db-actions button:disabled {
+    background: #ccc;
+    border-color: #ccc;
+    color: #888;
+    cursor: not-allowed;
+}
+
+#generateDbDialog {
+    max-width: min(460px, 90vw);
+    margin: auto;
+    position: fixed;
+    border: 0;
+    border-radius: 8px;
+    padding: 16px 20px;
+}
+
+#generateDbDialog::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+#generateDbDialog h2 {
+    margin-top: 0;
+    font-size: 18px;
+}
+
+#generateDbDialog input[type="number"] {
+    display: block;
+    width: 120px;
+    margin: 4px 0 12px;
+}
+
+.generate-db-check {
+    display: block;
+    margin-bottom: 12px;
+}
+
+.generate-db-warning {
+    color: #9a3412;
+}
+
+.generate-db-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

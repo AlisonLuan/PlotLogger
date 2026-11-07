@@ -54,7 +54,13 @@
                     <div id="drop-area-log" class="drop-container" data-type="log">
                         <p id="drop-text-log">Load your Log here.</p>
                         <input type="file" id="fileInputLog" hidden accept=".blf, .trc, .asc">
-                    </div>    
+                    </div>
+                    <div class="generate-db-actions">
+                        <button type="button" id="generateDbButton" disabled
+                            title="Load a log first. Infers a database from the log's CAN data.">Generate database from log</button>
+                        <button type="button" id="downloadDbButton" hidden
+                            title="Download the generated database as a .dbc file">Download .dbc</button>
+                    </div>
                         <p>Source Sorting</p>
                     <label for="filterOptions">Choose a filter:</label>
                     <select id="filterOptions" size="1">
@@ -134,6 +140,28 @@
     </div>
 
     <div id="toast-container"></div>
+
+    <dialog id="generateDbDialog" aria-labelledby="generateDbTitle">
+        <form method="dialog" id="generateDbForm">
+            <h2 id="generateDbTitle">Generate database from log</h2>
+            <p>Infers messages and signals from how the bits in the loaded log change. Names are generic, and
+               scaling, offset and units are not recoverable (scale 1, offset 0). Review the result before relying on it.
+               Everything is processed locally in your browser.</p>
+            <p id="generateDbReplaceWarning" class="generate-db-warning" hidden>
+                A database is already loaded. Generating will replace it and clear the current plot.</p>
+            <label for="generateDbMinFrames">Minimum frames per ID</label>
+            <input type="number" id="generateDbMinFrames" min="2" max="1000000" step="1" value="5">
+            <label class="generate-db-check">
+                <input type="checkbox" id="generateDbCounters" checked>
+                Detect rolling counters (bytes or nibbles that increase by one every frame)
+            </label>
+            <p id="generateDbError" class="generate-db-warning" role="alert" hidden></p>
+            <div class="generate-db-buttons">
+                <button type="button" id="generateDbCancel">Cancel</button>
+                <button type="submit" id="generateDbConfirm" value="confirm">Generate</button>
+            </div>
+        </form>
+    </dialog>
 
     <dialog id="shortcutsDialog" aria-label="Shortcuts">
         <div class="shortcuts-dialog-header">

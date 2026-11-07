@@ -11,14 +11,19 @@ import {populateCheckboxGroup} from "./sidebar-main.js";
 import {populateSignals} from "./sidebar-main.js";
 import {updateAvailableOnlyCheckbox} from "./sidebar-main.js";
 
+import {inferDatabaseFromLog, serializeDBC, downloadDbc} from "./dbc-generator.js";
+
 // Syncs the checkbox with the trace state and refreshes the signal list if a database is loaded.
 function refreshAvailableSignals() {
     updateAvailableOnlyCheckbox();
+    const generateButton = document.getElementById("generateDbButton");
+    if (generateButton) generateButton.disabled = !isLogLoaded();
     if (databaseHandler.isDatabaseLoaded()) populateSignals(databaseHandler.getDatabase());
 }
 
 let databaseLoadGeneration = 0;
 let logLoadGeneration = 0;
+let generatedDbcText = null; // DBC text of the database generated from the log, if that is the active one
 
 function clearCurrentPlot() {
     plotData.clearTraces();
@@ -60,6 +65,74 @@ document.addEventListener('DOMContentLoaded', function () {
     });*/
 });
 
+/******************** Generate database from log ********************/
+document.addEventListener("DOMContentLoaded", () => {
+    const generateButton = document.getElementById("generateDbButton");
+    const downloadButton = document.getElementById("downloadDbButton");
+    const dialog = document.getElementById("generateDbDialog");
+    const form = document.getElementById("generateDbForm");
+    const minFramesInput = document.getElementById("generateDbMinFrames");
+    const countersInput = document.getElementById("generateDbCounters");
+    const replaceWarning = document.getElementById("generateDbReplaceWarning");
+    const errorText = document.getElementById("generateDbError");
+    const confirmButton = document.getElementById("generateDbConfirm");
+
+    generateButton.addEventListener("click", () => {
+        if (!isLogLoaded()) return;
+        replaceWarning.hidden = !databaseHandler.isDatabaseLoaded();
+        errorText.hidden = true;
+        dialog.showModal();
+        minFramesInput.focus();
+    });
+
+    document.getElementById("generateDbCancel").addEventListener("click", () => dialog.close());
+
+    downloadButton.addEventListener("click", () => {
+        if (generatedDbcText) downloadDbc(generatedDbcText);
+    });
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        errorText.hidden = true;
+        confirmButton.disabled = true;
+        document.body.style.cursor = "wait";
+        try {
+            await new Promise(resolve => setTimeout(resolve, 0)); // let the busy cursor paint
+            const { database, summary } = inferDatabaseFromLog(log, {
+                minFrames: Number(minFramesInput.value),
+                detectCounters: countersInput.checked,
+            });
+            const dbcText = serializeDBC(database);
+
+            databaseLoadGeneration++;
+            clearCurrentPlot();
+            clearSelectedSignals();
+            resetUI();
+            databaseHandler.loadParsedDatabase(database);
+            generatedDbcText = dbcText;
+
+            document.getElementById("filterOptions").value = "filterByName";
+            populateCheckboxGroup("filterByName", databaseHandler.getDropdownContent());
+            populateSignals(databaseHandler.getDatabase());
+            document.getElementById("drop-text").textContent = "Generated from log";
+            document.getElementById("drop-area").classList.add("active");
+            downloadButton.hidden = false;
+            document.getElementById("PlotButton").disabled = false;
+
+            dialog.close();
+            showToast(`Generated ${summary.messages} message(s) and ${summary.signals} signal(s)` +
+                (summary.skippedIds > 0 ? `; ${summary.skippedIds} ID(s) skipped.` : "."));
+        } catch (error) {
+            console.error("Error generating database:", error);
+            errorText.textContent = error.message;
+            errorText.hidden = false;
+        } finally {
+            confirmButton.disabled = false;
+            document.body.style.cursor = "default";
+        }
+    });
+});
+
 /******************** Drop area Database ********************/
 document.addEventListener("DOMContentLoaded", () => {
     const databaseDropArea = document.getElementById("drop-area");
@@ -78,6 +151,8 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("PlotButton").disabled = true;
         clearCurrentPlot();
         databaseHandler.resetDatabase();
+        generatedDbcText = null;
+        document.getElementById("downloadDbButton").hidden = true;
         clearSelectedSignals();
         resetUI();
         dropText.textContent = "Loading Database...";

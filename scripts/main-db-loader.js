@@ -37,6 +37,17 @@ const databaseHandler = {
         }
     },
 
+    // Installs already-parsed database data (e.g. inferred from a log) as the active database.
+    loadParsedDatabase(parsedData) {
+        if (!parsedData || !Array.isArray(parsedData.messages) || !Array.isArray(parsedData.nodes)) {
+            throw new TypeError('Parsed database is missing messages or nodes.');
+        }
+        this.resetDatabase();
+        this.database = this.buildUnifiedDatabase(parsedData);
+        this.extractDropdownContent();
+        return this.database;
+    },
+
     getDatabase() {
         return this.database;
     },
