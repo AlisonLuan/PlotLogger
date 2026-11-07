@@ -127,6 +127,91 @@ base dec absolute
     });
   });
 
+  test('parses 12-hour am/pm date headers', async () => {
+    const parse = date => parseASC({
+      text: async () => `date ${date}\nbase hex  timestamps absolute\n1.000000 1 123 Rx d 1 01`
+    });
+    const pm = await parse('Fri Sep 30 03:09:41.360 pm 2016');
+    expect(pm[0].timestamp).toBeCloseTo(Date.UTC(2016, 8, 30, 15, 9, 41, 360) / 1000 + 1, 6);
+    expect(pm[0].isRelativeTimestamp).toBe(false);
+    const midnight = await parse('Sat Oct 1 12:00:00.000 am 2016');
+    expect(midnight[0].timestamp).toBe(Date.UTC(2016, 9, 1, 0, 0, 0, 0) / 1000 + 1);
+    const noon = await parse('Sat Oct 1 12:30:00.000 PM 2016');
+    expect(noon[0].timestamp).toBe(Date.UTC(2016, 9, 1, 12, 30, 0, 0) / 1000 + 1);
+  });
+
+  test('rejects unparseable date headers instead of producing NaN timestamps', async () => {
+    for (const date of [
+      'Fri Sep 30 13:09:41.360 pm 2016',
+      'Fri Foo 30 03:09:41.360 2016',
+      'Thu Feb 30 18:41:24.154 2025',
+      'Thu Feb 13 18:41:24.154 2025 extra',
+      'garbage'
+    ]) {
+      await expect(parseASC({ text: async () => `date ${date}\nbase hex timestamps absolute` }))
+        .rejects.toThrow('Invalid date format');
+    }
+  });
+
+  test('preserves years below 100 when parsing date headers', async () => {
+    const messages = await parseASC({
+      text: async () => 'date Thu Jan 1 00:00:00.000 0099\nbase hex absolute\n1.0 1 123 Rx d 1 01'
+    });
+    const expected = new Date(0);
+    expected.setUTCFullYear(99, 0, 1);
+    expected.setUTCHours(0, 0, 0, 0);
+    expect(messages[0].timestamp).toBe(expected.getTime() / 1000 + 1);
+  });
+
+  test('keeps absolute timestamps as elapsed seconds when there is no date line', async () => {
+    const messages = await parseASC({
+      text: async () => 'base hex  timestamps absolute\n5.000000 1 123 Rx d 1 01'
+    });
+    expect(messages[0].timestamp).toBe(5);
+    expect(messages[0].isRelativeTimestamp).toBe(true);
+  });
+
+  test('accumulates per-event deltas in "timestamps relative" mode', async () => {
+    const messages = await parseASC({
+      text: async () => [
+        'date Thu Feb 13 18:41:24.154 2025',
+        'base hex  timestamps relative',
+        '0.000000 Start of measurement',
+        '1.000000 1 123 Rx d 1 01',
+        '0.500000 CANFD 1 Rx 123 8 00 01 02 03 04 05 06 07', // skipped frame still advances the clock
+        '0.250000 1 123 Rx d 1 02'
+      ].join('\n')
+    });
+    expect(messages.map(message => message.timestamp)).toEqual([1, 1.75]);
+    expect(messages.every(message => message.isRelativeTimestamp)).toBe(true);
+  });
+
+  test('skips non-finite delta timestamps without poisoning elapsed time', async () => {
+    const tooLargeTimestamp = `${'9'.repeat(400)}.0`;
+    const messages = await parseASC({
+      text: async () => [
+        'base hex timestamps relative',
+        `${tooLargeTimestamp} 1 123 Rx d 1 01`,
+        '1.000000 1 123 Rx d 1 02'
+      ].join('\n')
+    });
+    expect(messages.map(message => message.timestamp)).toEqual([1]);
+  });
+
+  test('skips delta additions that overflow elapsed time', async () => {
+    const largeFiniteTimestamp = `${'1'}${'0'.repeat(308)}.0`;
+    const messages = await parseASC({
+      text: async () => [
+        'base hex timestamps relative',
+        `${largeFiniteTimestamp} 1 123 Rx d 1 01`,
+        `${largeFiniteTimestamp} 1 123 Rx d 1 02`,
+        '0.500000 1 123 Rx d 1 03'
+      ].join('\n')
+    });
+    expect(messages).toHaveLength(2);
+    expect(messages.map(message => message.timestamp)).toEqual([1e308, 1e308]);
+  });
+
   test('skips non-matching lines and handles extended IDs in absolute hex mode', async () => {
     const fileContent = `
 Some random text

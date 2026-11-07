@@ -28,7 +28,9 @@ npm test
 - Absolute ASC date lines are interpreted as UTC to keep timestamps consistent across formats
 - Log channels are normalized to zero-based indices across ASC, TRC, and BLF
 - Text logs (TRC/ASC, streamed line by line) are limited to 1 GiB and databases to 128 MiB; BLF files to 512 MiB, with a 256 MiB per-container and 512 MiB total decompressed-data limit
-- Relative ASC timestamps are plotted and exported as elapsed seconds instead of misleading 1970 calendar dates
+- Relative ASC timestamps are plotted and exported as elapsed seconds instead of misleading 1970 calendar dates; in `timestamps relative` mode the per-event gaps are summed into elapsed time
+- ASC logs without a `date` line, and TRC logs that are V1.0 or have no `$STARTTIME`, are likewise shown as elapsed seconds
+- ASC `date` lines in 12-hour form (`... 03:09:41.360 pm 2016`) are supported; an unreadable date header fails the load with a clear error
 
 ## Generate a database from a log
 

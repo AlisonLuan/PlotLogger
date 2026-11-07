@@ -31,6 +31,15 @@ function formatMessageId(messageId) {
     return { id: formattedId, isExtended };
 }
 
+// Decimal number as written by DBC tools: optional sign, "5", "5.", ".5", "5.5" and optional exponent.
+const DBC_NUMBER = "[-+]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][-+]?\\d+)?";
+const SIGNAL_LINE_PATTERN = new RegExp(
+    "^SG_\\s+(\\w+)(?:\\s+(M|m(\\d+)(?:M)?))?\\s*:\\s+(\\d+)\\|(\\d+)@([01])([+-])" +
+    `\\s*\\(\\s*(${DBC_NUMBER})\\s*,\\s*(${DBC_NUMBER})\\s*\\)` +
+    `\\s*\\[\\s*(${DBC_NUMBER})\\s*\\|\\s*(${DBC_NUMBER})\\s*\\]` +
+    '\\s*"([^"]*)".*$'
+);
+
 /**
  * Parses the DBC file content into structured data.
  * 
@@ -75,9 +84,14 @@ export function parseDBC(content) {
             return;
         }
 
-        const signalMatch = line.match(/^SG_\s+(\w+)(?:\s+(M|m(\d+)(?:M)?))?\s*:\s+(\d+)\|(\d+)@([01])([+-])\s*\(\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*,\s*([-+]?\d*\.?\d+)\s*\)\s*\[\s*([-+]?\d*\.?\d+)\s*\|\s*([-+]?\d*\.?\d+)\s*\]\s*"([^"]*)".*$/);
+        const signalMatch = line.match(SIGNAL_LINE_PATTERN);
 
         if (signalMatch && currentMessage) {
+            const [scaling, offset, minimum, maximum] = signalMatch.slice(8, 12).map(Number);
+            if (![scaling, offset, minimum, maximum].every(Number.isFinite)) {
+                return;
+            }
+
             const signal = {
                 name: signalMatch[1],
                 multiplexerName: undefined,
@@ -85,9 +99,9 @@ export function parseDBC(content) {
                 length: parseInt(signalMatch[5], 10),
                 byteOrder: signalMatch[6] === "1" ? "LittleEndian" : "BigEndian",
                 valueType: signalMatch[7] === "+" ? "Unsigned" : "Signed",
-                scaling: parseFloat(signalMatch[8]),
-                offset: parseFloat(signalMatch[9]),
-                valueRange: [parseFloat(signalMatch[10]), parseFloat(signalMatch[11])],
+                scaling,
+                offset,
+                valueRange: [minimum, maximum],
                 units: signalMatch[12],
                 defaultValue: 0,
             };

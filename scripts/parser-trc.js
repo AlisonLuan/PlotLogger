@@ -13,6 +13,7 @@ class TRCFileVersion {
 export async function parseTRC(file) {
     let fileVersion = TRCFileVersion.V1_0;
     let startTime = 0;
+    let hasStartTime = false;
     let columns = {};
     let messages = [];
 
@@ -127,9 +128,18 @@ export async function parseTRC(file) {
             }
         } else if (line.startsWith(";$STARTTIME")) {
             const baseDate = new Date(Date.UTC(1899, 11, 30, 0, 0, 0, 0)); // UTC base date
-            const daysOffset = parseFloat(line.split("=")[1]); // Days offset
-            const startTimestamp = baseDate.getTime() + daysOffset * 24 * 60 * 60 * 1000; // Convert days to ms
-            startTime = startTimestamp / 1000; // Convert to seconds
+            const daysOffsetText = line.slice(line.indexOf("=") + 1).trim();
+            const daysOffset = Number(daysOffsetText);
+            if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(daysOffsetText)) {
+                continue;
+            }
+            if (Number.isFinite(daysOffset)) {
+                const startTimestamp = baseDate.getTime() + daysOffset * 24 * 60 * 60 * 1000; // Convert days to ms
+                if (Number.isFinite(startTimestamp)) {
+                    startTime = startTimestamp / 1000; // Convert to seconds
+                    hasStartTime = true;
+                }
+            }
         } else if (line.startsWith(";$COLUMNS")) {
             const cols = line.split("=")[1].split(",");
             columns = Object.fromEntries(cols.map((col, index) => [col, index]));
@@ -140,8 +150,13 @@ export async function parseTRC(file) {
         }
     }
 
+    // V1.0 stores only offsets, and later versions need $STARTTIME for a calendar anchor.
+    // Otherwise the values are elapsed seconds and must not be shown as 1970 dates.
+    const isRelativeTimestamp = fileVersion === TRCFileVersion.V1_0 || !hasStartTime;
+
     return messages.map(message => ({
         timestamp: message.timestamp,           // Timestamp in seconds
+        ...(isRelativeTimestamp && { isRelativeTimestamp: true }),
         arbitrationId: message.arbitrationId,  // Message ID in decimal
         data: message.data,                    // Raw CAN payload as Uint8Array
         channel: message.channel ?? null,      // CAN channel (null if not provided)

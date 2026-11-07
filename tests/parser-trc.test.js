@@ -14,6 +14,7 @@ M1 2001 FFFFFFFF 3 0A 0B 0C
         expect(messages).toHaveLength(1);
         expect(messages[0]).toEqual({
             timestamp: 2000 / 1000, // 2 seconds
+            isRelativeTimestamp: true, // V1.0 has no start time, so this is elapsed time
             arbitrationId: 0x100,
             data: [10, 11, 12],
             channel: null,
@@ -142,6 +143,25 @@ FB 4000 7FF 2 3 Rx 0A 0B 0C
         expect(messages).toHaveLength(1);
         expect(messages[0].arbitrationId).toBe(0x18FF7844);
         expect(messages[0].isExtendedId).toBe(true);
+    });
+
+    test('marks timestamps relative when a V1.1+ file has no usable $STARTTIME', async () => {
+        for (const header of [
+            ';$FILEVERSION=1.1',
+            ';$FILEVERSION=1.1\n;$STARTTIME=',
+            ';$FILEVERSION=1.1\n;$STARTTIME=43831.5junk'
+        ]) {
+            const messages = await parseTRC({ text: async () => `${header}\nM1 100 Rx 0123 1 AA` });
+            expect(messages[0].timestamp).toBeCloseTo(0.1, 9);
+            expect(messages[0].isRelativeTimestamp).toBe(true);
+        }
+    });
+
+    test('keeps timestamps absolute when $STARTTIME is present', async () => {
+        const messages = await parseTRC({
+            text: async () => ';$FILEVERSION=1.1\n;$STARTTIME=43831.5\nM1 100 Rx 0123 1 AA'
+        });
+        expect(messages[0].isRelativeTimestamp).toBeUndefined();
     });
 
     test('rejects unsupported version 1.2 explicitly', async () => {

@@ -144,6 +144,22 @@ describe('parseDBC', () => {
         // The `-` in `0|8@0-` might indicate Intel byte order, so adjust your checks accordingly.
     });
 
+    test('parses numbers with exponents and trailing dots in offset, min and max', () => {
+        const dbc = [
+            'BO_ 256 Msg: 8 ECU',
+            ' SG_ A : 0|16@1+ (1,0) [0|65535] "" Vector__XXX',
+            ' SG_ B : 16|16@1+ (1,0) [0|1e+5] "" Vector__XXX',
+            ' SG_ C : 32|16@1+ (2.5E-1,1e-3) [0|65535] "" Vector__XXX',
+            ' SG_ D : 48|16@1- (0.1,-40.) [-40.|215.] "" Vector__XXX',
+            ' SG_ E : 56|8@1+ (1e999,0) [0|255] "" Vector__XXX'
+        ].join('\n');
+        const signals = parseDBC(dbc).messages[0].signals;
+        expect(signals.map(signal => signal.name)).toEqual(['A', 'B', 'C', 'D']);
+        expect(signals[1].valueRange).toEqual([0, 100000]);
+        expect(signals[2]).toMatchObject({ scaling: 0.25, offset: 0.001 });
+        expect(signals[3]).toMatchObject({ offset: -40, valueRange: [-40, 215] });
+    });
+
     test('handles no messages gracefully', () => {
         const dbcContent = `
         NS_ : 
