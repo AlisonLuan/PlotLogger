@@ -37,19 +37,6 @@ const plotData = {
         });
     },
 
-    // Scan traces and remove the data related to the signal name given
-    removeData(signalName) {
-        const initialLength = this.traces.length;
-        this.traces = this.traces.filter(trace => trace.name !== signalName);
-        const removedCount = initialLength - this.traces.length;
-
-        if (removedCount > 0) {
-            console.log(`Removed ${removedCount} trace(s) for signal '${signalName}'.`);
-        } else {
-            console.warn(`No traces found for signal '${signalName}' to remove.`);
-        }
-    },
-
     isYAxisInUse(axis) {
         // Check if any trace has the specified yaxis
         return plotData.traces.some(trace => trace.yaxis === axis);
@@ -284,7 +271,6 @@ function updatePlot() {
     Plotly.react('plot', data, plotLayout);
 
     updateAxisFieldsState()
-    console.log("plotLayout:", plotLayout);
 }
 
 /**

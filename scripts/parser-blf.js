@@ -26,6 +26,12 @@ const MAX_BLF_FILE_SIZE = 512 * 1024 * 1024;
 const MAX_CONTAINER_SIZE = 256 * 1024 * 1024;
 const MAX_BLF_UNCOMPRESSED_SIZE = 512 * 1024 * 1024;
 const INFLATE_INPUT_CHUNK_SIZE = 16 * 1024;
+// An object that continues into the next container is buffered; cap it so a bad size cannot exhaust memory.
+const MAX_SPLIT_OBJECT_SIZE = 16 * 1024 * 1024;
+// Smallest body (after the object header) each decoded CAN object type needs.
+const CAN_MESSAGE_BODY_SIZE = 16;
+const CAN_ERROR_EXT_BODY_SIZE = 32;
+const CAN_FD_MESSAGE_BODY_SIZE = 84;
 
 
 export async function parseBLF(file) {
@@ -54,6 +60,9 @@ export async function parseBLF(file) {
         }
         let offset = header.headerSize;
         let totalUncompressedSize = 0;
+        let tail = new Uint8Array(0); // unfinished object bytes carried into the next container
+        let tailIsIncompleteObject = false;
+        let skippedObjects = 0;
         while (offset + 16 <= fileSize) {
             const objectBuffer = await file.slice(offset, offset + 16).arrayBuffer();
             const object = OBJ_HEADER_BASE_STRUCTunpack(new DataView(objectBuffer));
@@ -100,8 +109,17 @@ export async function parseBLF(file) {
                 if (container.sizeUncompressed && containerData.byteLength !== container.sizeUncompressed) {
                     throw new Error("BLF container decompressed size does not match its header.");
                 }
-                for (const message of parseData(containerData, startTimestamp)) {
+                // An object may start at the end of one container and finish in the next one.
+                if (tail.length > 0) {
+                    const joined = new Uint8Array(tail.length + containerData.length);
+                    joined.set(tail, 0);
+                    joined.set(containerData, tail.length);
+                    containerData = joined;
+                }
+                const state = { end: 0, incomplete: false, skipped: 0 };
+                for (const message of parseData(containerData, startTimestamp, state)) {
                     parsedMessages.push({
+                        ...(startTimestamp === null && { isRelativeTimestamp: true }),
                         timestamp: message.timestamp,
                         arbitrationId: message.arbitrationId,
                         data: message.data,
@@ -116,6 +134,9 @@ export async function parseBLF(file) {
                         errorStateIndicator: message.errorStateIndicator
                     });
                 }
+                tail = containerData.slice(state.end);
+                tailIsIncompleteObject = state.incomplete;
+                skippedObjects += state.skipped;
             }
             const objectEnd = offset + object.objectSize;
             const alignedObjectEnd = (objectEnd + 3) & ~3;
@@ -123,6 +144,12 @@ export async function parseBLF(file) {
                 throw new Error(`Truncated BLF object padding at byte ${objectEnd}.`);
             }
             offset = Math.min(alignedObjectEnd, fileSize);
+        }
+        if (tailIsIncompleteObject) {
+            throw new Error("Invalid BLF object size: the last object is cut off at the end of the file.");
+        }
+        if (skippedObjects > 0) {
+            console.warn(`Skipped ${skippedObjects} BLF object(s) too small for their declared type.`);
         }
 
         function inflateContainer(compressedData, maxOutputSize) {
@@ -604,6 +631,8 @@ function systemTimeToTimestamp(systemTime) {
         const [year, month, , day, hour, minute, second, milliseconds] = systemTime;
 
         // Create a JavaScript Date object
+        // An all-zero header start time means "unknown": keep elapsed seconds instead of 1899 dates.
+        if (systemTime.every(value => value === 0)) return null;
         const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, milliseconds));
 
         // Return the timestamp (seconds since UNIX epoch)
@@ -619,7 +648,7 @@ function systemTimeToTimestamp(systemTime) {
  * @param {Uint8Array} data - The binary data to parse.
  * @yields {object} Parsed message objects with relevant fields.
  */
-function* parseData(data, fileStartTimestamp) {
+function* parseData(data, fileStartTimestamp, state = { end: 0, incomplete: false, skipped: 0 }) {
     // Local copies of sizes and unpack functions
     const objHeaderBaseSize = 16; // OBJ_HEADER_BASE_STRUCT.size
     const objHeaderV1Size = 16; // OBJ_HEADER_V1_STRUCT.size
@@ -628,7 +657,9 @@ function* parseData(data, fileStartTimestamp) {
     const maxPos = data.byteLength;
     let pos = 0;
 
+    // state.end is where parsing stopped; bytes after it belong to an object that continues in the next container.
     while (pos + objHeaderBaseSize <= maxPos) {
+        state.end = pos;
         const objectStart = pos;
         const header = unpackObjHeaderBase(data, pos);
         const [signature, , headerVersion, objSize, objType] = header;
@@ -636,12 +667,16 @@ function* parseData(data, fileStartTimestamp) {
             throw new Error(`Invalid object signature at container byte ${pos}.`);
         }
         const nextPos = pos + objSize;
-        if (objSize < objHeaderBaseSize || nextPos > maxPos) {
+        if (objSize < objHeaderBaseSize) {
             throw new Error(`Invalid object size at container byte ${pos}.`);
         }
         const alignedNextPos = (nextPos + 3) & ~3;
-        if (alignedNextPos > maxPos && nextPos !== maxPos) {
-            throw new Error(`Truncated object padding at container byte ${nextPos}.`);
+        if (nextPos > maxPos || (alignedNextPos > maxPos && nextPos !== maxPos)) {
+            if (objSize > MAX_SPLIT_OBJECT_SIZE) {
+                throw new Error(`Invalid object size at container byte ${pos}.`);
+            }
+            state.incomplete = true;
+            return;
         }
         pos += objHeaderBaseSize;
 
@@ -661,7 +696,20 @@ function* parseData(data, fileStartTimestamp) {
 
         // Calculate absolute timestamp
         const factor = flags === 1 ? 1e-5 : 1e-9;
-        timestamp = Number(timestamp) * factor + fileStartTimestamp;
+        timestamp = Number(timestamp) * factor + (fileStartTimestamp ?? 0);
+
+        // Never decode a fixed layout from bytes that belong to the next object.
+        const bodySize = nextPos - pos;
+        const requiredBodySize = objType === CAN_MESSAGE || objType === CAN_MESSAGE2 ? CAN_MESSAGE_BODY_SIZE
+            : objType === CAN_ERROR_EXT ? CAN_ERROR_EXT_BODY_SIZE
+            : objType === CAN_FD_MESSAGE ? CAN_FD_MESSAGE_BODY_SIZE
+            : objType === CAN_FD_MESSAGE_64 ? canFd64MsgSize
+            : 0;
+        if (bodySize < requiredBodySize) {
+            state.skipped++;
+            pos = Math.min(alignedNextPos, maxPos);
+            continue;
+        }
 
         // Parse object data based on objType
         switch (objType) {
@@ -758,31 +806,10 @@ function* parseData(data, fileStartTimestamp) {
 
         pos = Math.min(alignedNextPos, maxPos);
     }
+    state.end = pos;
 }
 
 function dlcToLength(dlc) {
     const lengths = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64];
     return lengths[dlc] ?? dlc;
-}
-
-/**
- * Helper function to find the "LOBJ" signature in a binary data array.
- * @param {Uint8Array} data - The binary data to search.
- * @param {number} start - The start index for the search.
- * @param {number} end - The end index for the search.
- * @returns {number} The index of the "LOBJ" signature.
- * @throws {Error} If the "LOBJ" signature is not found.
- */
-function findLOBJ(data, start, end) {
-    for (let i = start; i < end; i++) {
-        if (
-            data[i] === "L".charCodeAt(0) &&
-            data[i + 1] === "O".charCodeAt(0) &&
-            data[i + 2] === "B".charCodeAt(0) &&
-            data[i + 3] === "J".charCodeAt(0)
-        ) {
-            return i;
-        }
-    }
-    throw new Error("LOBJ signature not found");
 }

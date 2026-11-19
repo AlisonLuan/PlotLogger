@@ -1,4 +1,4 @@
-import { buildUnifiedLog, isLogLoaded, log, resetLog, timestampToISOString } from "../scripts/main-log-loader.js";
+import { buildUnifiedLog, isFrameInLog, isLogLoaded, log, resetLog, timestampToISOString } from "../scripts/main-log-loader.js";
 
 describe("unified log loader", () => {
     beforeEach(() => resetLog());
@@ -50,6 +50,21 @@ describe("unified log loader", () => {
         expect(skipped).toBe(2);
         expect(log).toHaveLength(1);
         expect(log[0].id).toBe("0x100");
+    });
+
+    test("converts the parsed array in place instead of copying it", () => {
+        const parsed = [
+            { timestamp: 1, arbitrationId: 256, data: new Uint8Array([1]) },
+            { timestamp: NaN, arbitrationId: 257, data: [2] },
+            { timestamp: 2, arbitrationId: 258, data: [3], isExtendedId: true }
+        ];
+        const skipped = buildUnifiedLog(parsed);
+        expect(skipped).toBe(1);
+        expect(log).toBe(parsed);
+        expect(log.map(message => message.id)).toEqual(["0x100", "0x102"]);
+        expect(log[0].data).toEqual([1]);
+        expect(isFrameInLog("0x102", true)).toBe(true);
+        expect(isFrameInLog("0x102", false)).toBe(false);
     });
 
     test("does not load a log when every parsed frame is malformed", () => {

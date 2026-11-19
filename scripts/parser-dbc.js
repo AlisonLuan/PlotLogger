@@ -124,41 +124,6 @@ export function parseDBC(content) {
             }
             return;
         }
-
-        const valueMatch = line.match(/^VAL_\s+(\d+)\s+(\w+)\s+((?:\d+\s+\"[^\"]*\"\s*)+);$/);
-        if (valueMatch) {
-            const { id: messageId } = formatMessageId(valueMatch[1]);
-            const signalName = valueMatch[2];
-            const valuePairs = valueMatch[3].match(/(\d+)\s+\"([^\"]*)\"/g);
-
-            if (!valueDescriptions[messageId]) {
-                valueDescriptions[messageId] = {};
-            }
-
-            valueDescriptions[messageId][signalName] = valuePairs.reduce((acc, pair) => {
-                const [value, description] = pair.match(/(\d+)\s+\"([^\"]*)\"/).slice(1, 3);
-                acc[value] = description;
-                return acc;
-            }, {});
-        }
-
-        const commentMatch = line.match(/^CM_\s+BO_\s+(\d+)\s+"([^"]*)";$/);
-        if (commentMatch) {
-            const { id: messageId } = formatMessageId(commentMatch[1]);
-            const description = commentMatch[2];
-            pendingComments[messageId] = description;
-        }
-
-        const signalCommentMatch = line.match(/^CM_\s+SG_\s+(\d+)\s+(\w+)\s+"([^"]+)";$/);
-        if (signalCommentMatch) {
-            const { id: messageId } = formatMessageId(signalCommentMatch[1]);
-            const signalName = signalCommentMatch[2];
-            const description = signalCommentMatch[3];
-            if (!pendingSignalComments[messageId]) {
-                pendingSignalComments[messageId] = {};
-            }
-            pendingSignalComments[messageId][signalName] = description;
-        }
     });
 
     if (currentMessage) {
@@ -209,8 +174,11 @@ export function parseDBC(content) {
         });
     }
 
+    const messagesById = new Map();
+    for (const message of messages) if (!messagesById.has(message.id)) messagesById.set(message.id, message);
+
     for (const item of pendingMultiplexerRanges) {
-        const signal = messages.find(message => message.id === item.messageId)
+        const signal = messagesById.get(item.messageId)
             ?.signals.find(candidate => candidate.name === item.signalName);
         if (signal) {
             signal.isMultiplexed = true;
@@ -220,7 +188,7 @@ export function parseDBC(content) {
     }
 
     for (const item of pendingFloatTypes) {
-        const signal = messages.find(message => message.id === item.messageId)
+        const signal = messagesById.get(item.messageId)
             ?.signals.find(candidate => candidate.name === item.signalName);
         if (signal && (item.type === 1 || item.type === 2)) {
             signal.valueType = item.type === 1 ? "Float32" : "Float64";

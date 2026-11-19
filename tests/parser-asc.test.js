@@ -140,16 +140,25 @@ base dec absolute
     expect(noon[0].timestamp).toBe(Date.UTC(2016, 9, 1, 12, 30, 0, 0) / 1000 + 1);
   });
 
-  test('rejects unparseable date headers instead of producing NaN timestamps', async () => {
-    for (const date of [
-      'Fri Sep 30 13:09:41.360 pm 2016',
-      'Fri Foo 30 03:09:41.360 2016',
-      'Thu Feb 30 18:41:24.154 2025',
-      'Thu Feb 13 18:41:24.154 2025 extra',
-      'garbage'
-    ]) {
-      await expect(parseASC({ text: async () => `date ${date}\nbase hex timestamps absolute` }))
-        .rejects.toThrow('Invalid date format');
+  test('falls back to elapsed seconds for unparseable date headers instead of producing NaN timestamps', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const date of [
+        'Fri Sep 30 13:09:41.360 pm 2016',
+        'Fri Foo 30 03:09:41.360 2016',
+        'Thu Feb 30 18:41:24.154 2025',
+        'Thu Feb 13 18:41:24.154 2025 extra',
+        'garbage'
+      ]) {
+        const messages = await parseASC({
+          text: async () => `date ${date}\nbase hex timestamps absolute\n1.5 1 123 Rx d 1 01`
+        });
+        expect(messages).toHaveLength(1);
+        expect(messages[0].timestamp).toBe(1.5);
+        expect(messages[0].isRelativeTimestamp).toBe(true);
+      }
+    } finally {
+      warn.mockRestore();
     }
   });
 

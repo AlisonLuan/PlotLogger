@@ -235,16 +235,16 @@ describe("databaseHandler.loadParsedDatabase", () => {
 
         expect(databaseHandler.isDatabaseLoaded()).toBe(true);
         expect(unified.messages[0].signals[0]).toMatchObject({ name: "Sig_1", startBit: 0, length: 8, scaling: 1 });
-        expect(databaseHandler.getDropdownContent().Signal).toEqual(["Sig_1"]);
+        expect(databaseHandler.getDropdownContent().Sender).toEqual(["Vector__XXX"]);
     });
 
     test("replaces a previously loaded database and rejects invalid data", () => {
         databaseHandler.database = { messages: [{ id: "0x1", name: "Old", signals: [] }] };
-        databaseHandler.dropdownContent = { ID: ["0x1"], MsgName: ["Old"], Sender: [], Signal: [] };
+        databaseHandler.dropdownContent = { Sender: ["Old"] };
         const { database } = inferDatabaseFromLog(framesFor("0x123", 50, index => [index * 5]), { detectCounters: false });
         databaseHandler.loadParsedDatabase(database);
 
-        expect(databaseHandler.getDropdownContent().MsgName).toEqual(["MSG_123"]);
+        expect(databaseHandler.getDropdownContent().Sender).toEqual(["Vector__XXX"]);
         expect(() => databaseHandler.loadParsedDatabase({})).toThrow(TypeError);
     });
 });

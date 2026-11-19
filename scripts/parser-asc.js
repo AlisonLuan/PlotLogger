@@ -10,7 +10,13 @@ export async function parseASC(file) {
 
     for await (const line of readTrimmedLines(file)) {
         if (line.startsWith("date ")) {
-            startTime = parseDate(line.slice(5));
+            // A date in an unknown format (e.g. another language) only loses the calendar anchor; frames stay as elapsed seconds.
+            try {
+                startTime = parseDate(line.slice(5));
+            } catch (error) {
+                startTime = null;
+                console.warn(`${error.message}. Timestamps will be shown as elapsed seconds.`);
+            }
             continue;
         }
         if (line.startsWith("base ")) {

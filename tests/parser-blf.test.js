@@ -32,7 +32,7 @@ function createContainer(data, compressionMethod = 0, declaredSize = data.length
     return bytes;
 }
 
-function createFile(containers, milliseconds = 0) {
+function createFile(containers, milliseconds = 0, systemTime = [2025, 1, 0, 1, 1, 1, 0, milliseconds]) {
     const fileSize = 72 + containers.reduce((size, container) => size + container.length, 0);
     const bytes = new Uint8Array(fileSize);
     const view = new DataView(bytes.buffer);
@@ -41,7 +41,6 @@ function createFile(containers, milliseconds = 0) {
     view.setBigUint64(16, BigInt(fileSize), true);
     view.setBigUint64(24, BigInt(fileSize), true);
     view.setUint32(32, containers.length, true);
-    const systemTime = [2025, 1, 0, 1, 1, 1, 0, milliseconds];
     systemTime.forEach((value, index) => view.setUint16(40 + index * 2, value, true));
     let offset = 72;
     for (const container of containers) {
@@ -189,6 +188,71 @@ describe("parseBLF", () => {
             createContainer(classicCanMessage(0x123, [1]))
         ], 500));
         expect(messages[0].timestamp).toBe(Date.UTC(2025, 0, 1, 1, 1, 0, 500) / 1000 + 1);
+    });
+
+    test("joins an object that is split across two containers", async () => {
+        const first = classicCanMessage(0x123, [0xAA, 0xBB]);
+        const second = classicCanMessage(0x124, [0xCC]);
+        const bytes = new Uint8Array([...first, ...second]);
+        for (const cut of [5, 20, first.length, first.length + 10]) {
+            const messages = await parseBLF(createFile([
+                createContainer(bytes.slice(0, cut)),
+                createContainer(bytes.slice(cut))
+            ]));
+            expect(messages.map(message => message.arbitrationId)).toEqual([0x123, 0x124]);
+            expect(Array.from(messages[0].data)).toEqual([0xAA, 0xBB]);
+            expect(Array.from(messages[1].data)).toEqual([0xCC]);
+        }
+    });
+
+    test("rejects an object that is cut off at the end of the file", async () => {
+        const message = classicCanMessage(0x123, [1]);
+        await expect(parseBLF(createFile([createContainer(message.slice(0, 20))])))
+            .rejects.toThrow("Invalid BLF object size");
+    });
+
+    test("rejects a split object that declares an absurd size", async () => {
+        const message = classicCanMessage(0x123, [1]);
+        new DataView(message.buffer).setUint32(8, 0x7FFFFFFF, true);
+        await expect(parseBLF(createFile([createContainer(message)])))
+            .rejects.toThrow("Invalid object size");
+    });
+
+    test("skips CAN objects too small for their type instead of reading the next object", async () => {
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            const tooSmall = createInnerObject(1, new Uint8Array(4));
+            const next = classicCanMessage(0x222, [0x44]);
+            const messages = await parseBLF(createFile([createContainer(new Uint8Array([...tooSmall, ...next]))]));
+            expect(messages).toHaveLength(1);
+            expect(messages[0].arbitrationId).toBe(0x222);
+            expect(Array.from(messages[0].data)).toEqual([0x44]);
+            // Also when the small object is the last one in the container.
+            await expect(parseBLF(createFile([createContainer(tooSmall)]))).resolves.toEqual([]);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    test("skips CAN FD 64 objects shorter than their fixed header", async () => {
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            const tooSmall = createInnerObject(101, new Uint8Array(10));
+            const next = classicCanMessage(0x222, [0x44]);
+            const messages = await parseBLF(createFile([createContainer(new Uint8Array([...tooSmall, ...next]))]));
+            expect(messages.map(m => m.arbitrationId)).toEqual([0x222]);
+            await expect(parseBLF(createFile([createContainer(tooSmall)]))).resolves.toEqual([]);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    test("keeps elapsed seconds when the header start time is all zero", async () => {
+        const messages = await parseBLF(createFile(
+            [createContainer(classicCanMessage(0x123, [1]))], 0, [0, 0, 0, 0, 0, 0, 0, 0]
+        ));
+        expect(messages[0].isRelativeTimestamp).toBe(true);
+        expect(messages[0].timestamp).toBeCloseTo(1, 9);
     });
 
     test("throws for invalid BLF signatures", async () => {

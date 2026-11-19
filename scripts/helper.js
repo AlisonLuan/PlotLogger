@@ -25,6 +25,29 @@ export function extractRawValue(data, startBit, length, byteOrder) {
         throw new RangeError("Signal start bit and length must be positive integers.");
     }
 
+    // Up to 32 bits fit in a plain Number (bit tricks stay in 32 bits), so skip BigInt in the common case.
+    if (length <= 32) {
+        let value = 0;
+        if (byteOrder === "BigEndian") {
+            let bitIndex = startBit;
+            for (let index = 0; index < length; index++) {
+                const byteIndex = Math.floor(bitIndex / 8);
+                if (byteIndex >= data.length) return NaN;
+                const bitInByte = bitIndex % 8;
+                value = value * 2 + ((data[byteIndex] >> bitInByte) & 1);
+                bitIndex = bitInByte === 0 ? bitIndex + 15 : bitIndex - 1;
+            }
+        } else {
+            for (let index = 0; index < length; index++) {
+                const bitIndex = startBit + index;
+                const byteIndex = Math.floor(bitIndex / 8);
+                if (byteIndex >= data.length) return NaN;
+                if ((data[byteIndex] >> (bitIndex % 8)) & 1) value += 2 ** index;
+            }
+        }
+        return value;
+    }
+
     let rawValue = 0n;
     if (byteOrder === "BigEndian") {
         let bitIndex = startBit;

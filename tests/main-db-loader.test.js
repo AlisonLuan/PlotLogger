@@ -13,14 +13,14 @@ describe('databaseHandler', () => {
     test('resetDatabase() should reset database and dropdownContent', () => {
         // Set some initial data
         databaseHandler.database = { messages: [{ id: 1, name: 'Message 1' }] };
-        databaseHandler.dropdownContent = { ID: [1], MsgName: ['Message 1'], Sender: ['Sender 1'], Signal: ['Signal 1'] };
+        databaseHandler.dropdownContent = { Sender: ['Sender 1'] };
 
         // Call resetDatabase
         databaseHandler.resetDatabase();
 
         // Assert database and dropdownContent are reset
         expect(databaseHandler.database).toBeNull();
-        expect(databaseHandler.dropdownContent).toEqual({ ID: [], MsgName: [], Sender: [], Signal: [] });
+        expect(databaseHandler.dropdownContent).toEqual({ Sender: [] });
     });
 
     test('isDatabaseLoaded() should return true if database is loaded', () => {
@@ -52,22 +52,85 @@ describe('databaseHandler', () => {
         databaseHandler.extractDropdownContent();
 
         // Ensure dropdownContent is updated correctly
-        expect(databaseHandler.dropdownContent.ID).toEqual([4, 5]);
-        expect(databaseHandler.dropdownContent.MsgName).toEqual(['Message 4', 'Message 5']);
         expect(databaseHandler.dropdownContent.Sender).toEqual(['Sender 4', 'Sender 5']);
-        expect(databaseHandler.dropdownContent.Signal).toEqual(['Signal 4', 'Signal 5']);
+
+        // Calling it again must not duplicate senders
+        databaseHandler.extractDropdownContent();
+        expect(databaseHandler.dropdownContent.Sender).toEqual(['Sender 4', 'Sender 5']);
     });
 
-    test('addUnique() should add unique values to an array', () => {
-        const array = [1, 2, 3];
-        
-        // Adding unique value
-        databaseHandler.addUnique(array, 4);
-        expect(array).toEqual([1, 2, 3, 4]);
+    test('buildUnifiedDatabase() drops signals the decoder cannot read correctly', () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const sig = (name, extra = {}) => ({ name, startBit: 0, length: 8, ...extra });
+            const database = databaseHandler.buildUnifiedDatabase({
+                nodes: [],
+                messages: [{
+                    id: '0x100', name: 'M', dlc: 8, sender: 'S',
+                    signals: [
+                        sig('Good'),
+                        sig('ZeroLength', { length: 0 }),
+                        sig('TooLong', { length: 65 }),
+                        sig('NegativeStart', { startBit: -1 }),
+                        sig('ShortFloat', { length: 16, valueType: 'Float32' }),
+                        sig('GoodFloat', { length: 32, valueType: 'Float32' }),
+                        sig('NoMux', { multiplexerValue: 1 }),
+                    ]
+                }]
+            });
+            expect(database.messages[0].signals.map(signal => signal.name)).toEqual(['Good', 'GoodFloat']);
+        } finally {
+            warn.mockRestore();
+        }
+    });
 
-        // Adding duplicate value
-        databaseHandler.addUnique(array, 3);
-        expect(array).toEqual([1, 2, 3, 4]);
+    test('buildUnifiedDatabase() drops multiplexed signals whose multiplexer is unusable', () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const database = databaseHandler.buildUnifiedDatabase({
+                nodes: [],
+                messages: [{
+                    id: '0x100', name: 'M', dlc: 8, sender: 'S',
+                    signals: [
+                        { name: 'BadMux', startBit: 0, length: 0, isMultiplexer: true },
+                        { name: 'A', startBit: 8, length: 8, multiplexerValue: 2 },
+                    ]
+                }]
+            });
+            expect(database.messages[0].signals).toEqual([]);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    test('buildUnifiedDatabase() falls back to a valid multiplexer when the named one is missing', () => {
+        const database = databaseHandler.buildUnifiedDatabase({
+            nodes: [],
+            messages: [{
+                id: '0x100', name: 'M', dlc: 8, sender: 'S',
+                signals: [
+                    { name: 'Mux', startBit: 4, length: 4, isMultiplexer: true, byteOrder: 'BigEndian' },
+                    { name: 'A', startBit: 8, length: 8, multiplexerValue: 2, multiplexerName: 'Other' },
+                ]
+            }]
+        });
+        expect(database.messages[0].signals[1]).toEqual(expect.objectContaining({ multiplexerStartBit: 4, multiplexerLength: 4 }));
+    });
+
+    test('buildUnifiedDatabase() uses the real multiplexer definition', () => {
+        const database = databaseHandler.buildUnifiedDatabase({
+            nodes: [],
+            messages: [{
+                id: '0x100', name: 'M', dlc: 8, sender: 'S',
+                signals: [
+                    { name: 'Mux', startBit: 4, length: 4, isMultiplexer: true, byteOrder: 'BigEndian' },
+                    { name: 'A', startBit: 8, length: 8, multiplexerValue: 2 },
+                ]
+            }]
+        });
+        expect(database.messages[0].signals[1]).toEqual(expect.objectContaining({
+            multiplexerStartBit: 4, multiplexerLength: 4, multiplexerByteOrder: 'BigEndian'
+        }));
     });
 
     test('buildUnifiedDatabase() should format parsed data correctly', () => {

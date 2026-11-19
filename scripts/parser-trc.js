@@ -10,6 +10,11 @@ class TRCFileVersion {
     static V2_1 = 201;
 }
 
+// PEAK writes 11-bit IDs with up to 4 hex digits and 29-bit IDs with 8, so a short ID can still be extended.
+function isExtendedIdText(idText) {
+    return (idText?.length ?? 0) > 4 || parseInt(idText, 16) > 0x7FF;
+}
+
 export async function parseTRC(file) {
     let fileVersion = TRCFileVersion.V1_0;
     let startTime = 0;
@@ -32,16 +37,12 @@ export async function parseTRC(file) {
         return null;
     }
 
-    function formatTimestamp(timestamp) {
-        return timestamp;
-    }
-
     function parseMsgV1_0(cols) {
         if (cols[2] === "FFFFFFFF") return null; // Ignore bus info lines
         return {
-            timestamp: formatTimestamp(parseFloat(cols[1]) / 1000),
+            timestamp: parseFloat(cols[1]) / 1000,
             arbitrationId: parseInt(cols[2], 16),
-            isExtendedId: parseInt(cols[2], 16) > 0x7FF,
+            isExtendedId: isExtendedIdText(cols[2]),
             dlc: parseInt(cols[3]),
             data: cols.slice(4, 4 + parseInt(cols[3])).map(hex => parseInt(hex, 16))
         };
@@ -49,9 +50,9 @@ export async function parseTRC(file) {
 
     function parseMsgV1_1(cols) {
         return {
-            timestamp: formatTimestamp(parseFloat(cols[1]) / 1000 + startTime),
+            timestamp: parseFloat(cols[1]) / 1000 + startTime,
             arbitrationId: parseInt(cols[3], 16),
-            isExtendedId: parseInt(cols[3], 16) > 0x7FF,
+            isExtendedId: isExtendedIdText(cols[3]),
             dlc: parseInt(cols[4]),
             data: cols.slice(5, 5 + parseInt(cols[4])).map(hex => parseInt(hex, 16)),
             isRx: cols[2] === "Rx"
@@ -60,9 +61,9 @@ export async function parseTRC(file) {
 
     function parseMsgV1_3(cols) {
         return {
-            timestamp: formatTimestamp(parseFloat(cols[1]) / 1000 + startTime),
+            timestamp: parseFloat(cols[1]) / 1000 + startTime,
             arbitrationId: parseInt(cols[4], 16),
-            isExtendedId: parseInt(cols[4], 16) > 0x7FF,
+            isExtendedId: isExtendedIdText(cols[4]),
             channel: parseInt(cols[2]) - 1,
             dlc: parseInt(cols[6]),
             data: cols.slice(7, 7 + parseInt(cols[6])).map(hex => parseInt(hex, 16)),
@@ -79,7 +80,7 @@ export async function parseTRC(file) {
         const type = cols[columns["T"]];
         const timestamp = parseFloat(cols[columns["O"]]) / 1000 + startTime;
         const arbitrationId = parseInt(cols[columns["I"]], 16);
-        const isExtendedId = parseInt(cols[columns["I"]], 16) > 0x7FF;
+        const isExtendedId = isExtendedIdText(cols[columns["I"]]);
         const channel = columns["B"] !== undefined
             ? parseInt(cols[columns["B"]]) - 1
             : 0;
@@ -103,7 +104,7 @@ export async function parseTRC(file) {
         }
         
         return {
-            timestamp: formatTimestamp(timestamp),
+            timestamp: timestamp,
             arbitrationId,
             isExtendedId,
             channel,

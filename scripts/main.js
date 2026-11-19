@@ -60,9 +60,6 @@ window.hideTooltip = function () {
 document.addEventListener('DOMContentLoaded', function () {
     const arrowButton = document.getElementById('arrowButton');
     arrowButton.addEventListener('click', toggleSidebar);
-    /*window.addEventListener('resize', () => {
-        //Plotly.Plots.resize('plot');
-    });*/
 });
 
 /******************** Generate database from log ********************/
@@ -168,8 +165,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             dropText.textContent = file.name;
             databaseDropArea.classList.add("active");
-                console.log("Database loaded:", databaseHandler.getDatabase());
-                databaseHandler.extractDropdownContent(); // Update dropdowns
                 const dropdownContent = databaseHandler.getDropdownContent();
                 document.getElementById("filterOptions").value = "filterByName";
 
@@ -458,10 +453,6 @@ function getSelectedSignals() {
 }
 
 /******************** Plot Container ********************/
-/*window.addEventListener('resize', () => {
-    //Plotly.Plots.resize('plot'); // Resizes the Plotly chart
-});*/
-
 
 function showToast(message) {
     const toastContainer = document.getElementById("toast-container");
@@ -602,15 +593,6 @@ document.getElementById("plot").addEventListener("wheel", function(event) {
         });
     }
 });
-/*
-        updateXAxisProperty("autorange", false); // Disable X-axis autorange
-        updateXAxisProperty("range", [
-            adjustDateRange(xRange[0], zoomInSeconds),
-            adjustDateRange(xRange[1], -zoomInSeconds)
-
-                updatePlot(); // Apply updates to the plot
-
-*/
 
 
 

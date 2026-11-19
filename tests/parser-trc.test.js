@@ -145,6 +145,14 @@ FB 4000 7FF 2 3 Rx 0A 0B 0C
         expect(messages[0].isExtendedId).toBe(true);
     });
 
+    test('treats an 8-digit ID as extended even when its value fits in 11 bits', async () => {
+        const messages = await parseTRC({
+            text: async () => ';$FILEVERSION=1.1\n1) 1.0 Rx 00000123 1 AA\n2) 2.0 Rx 0123 1 BB'
+        });
+        expect(messages.map(message => message.isExtendedId)).toEqual([true, false]);
+        expect(messages.map(message => message.arbitrationId)).toEqual([0x123, 0x123]);
+    });
+
     test('marks timestamps relative when a V1.1+ file has no usable $STARTTIME', async () => {
         for (const header of [
             ';$FILEVERSION=1.1',

@@ -231,22 +231,6 @@ function stopResizingSources() {
 
 /******************** Plot Button  ********************/
 
-function updateButtonColor(buttonId, condition) {
-    let button = document.getElementById(buttonId);
-
-    if (button) {
-        if (condition) {
-            button.style.backgroundColor = "#9bf59ef3"; // Green (Hex)
-            //button.style.color = "#FFFFFF"; // White text (Hex)
-        } else {
-            button.style.backgroundColor = "#fffffff3"; // white (Hex)
-            //button.style.color = "#FFFFFF"; // White text (Hex)
-        }
-    } else {
-        console.error(`Button with ID '${buttonId}' not found.`);
-    }
-}
-
 // Encapsulated scroll handler for filter options
 function handleFilterOptionsScroll(event) {
     event.preventDefault(); // Prevent the page from scrolling
@@ -275,5 +259,4 @@ export { populateSignals }; // Export if used in other modules
 export { updateAvailableOnlyCheckbox };
 export { populateCheckboxGroup }; // Export if used in other modules
 export { handleFilterOptionsScroll }; // Export if used in other modules
-export { updateButtonColor }; // Export if used in other modules
 export { clearSelectedSignals };

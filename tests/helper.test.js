@@ -160,3 +160,17 @@ describe('extractRawValue', () => {
     expect(result).toBe(0xF56);
   });
 });
+
+describe("extractRawValue width boundaries", () => {
+    const bytes = [0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x80, 0x00, 0x00];
+    test("returns exact unsigned values at 32 bits and above", () => {
+        expect(extractRawValue(bytes, 0, 32, "LittleEndian")).toBe(0xFFFFFFFF);
+        expect(extractRawValue(bytes, 0, 33, "LittleEndian")).toBe(0x1FFFFFFFF);
+        expect(extractRawValue(bytes, 0, 40, "LittleEndian")).toBe(0x01FFFFFFFF);
+        expect(extractRawValue([0x12, 0x34, 0x56, 0x78], 7, 32, "BigEndian")).toBe(0x12345678);
+    });
+    test("still reports truncated payloads as NaN", () => {
+        expect(extractRawValue([1, 2], 0, 24, "LittleEndian")).toBeNaN();
+        expect(extractRawValue([1, 2], 7, 24, "BigEndian")).toBeNaN();
+    });
+});

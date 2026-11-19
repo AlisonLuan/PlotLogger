@@ -25,30 +25,6 @@ export function isLogLoaded() {
     return Array.isArray(log) && log.length > 0;
 }
 
-function selectFileLOG() {
-    return new Promise((resolve, reject) => {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = '.blf, .trc, .asc';
-
-        // Wait a little before triggering the click
-        setTimeout(() => {
-            fileInput.addEventListener('change', function (event) {
-
-                // Get the selected file
-                const file = event.target.files[0];
-                if (file) {
-                    resolve(file); // Resolve with the selected file
-                } else {
-                    reject("No file selected.");
-                }
-            });
-            fileInput.click();
-        }, 5);
-    });
-}
-
-
 export async function parseFileLOG(file) {
     try {
         const fileExtension = file.name.split('.').pop().toLowerCase();
@@ -86,7 +62,9 @@ export async function parseFileLOG(file) {
 
 /**
  * Converts parsed CAN messages into the unified log format.
- * @param {Array} parsedMessages - Array of parsed CAN messages from parseBLF.
+ * The array is converted in place and becomes the log, so a large log is not held twice in memory.
+ * Do not reuse `parsedMessages` after calling this.
+ * @param {Array} parsedMessages - Array of parsed CAN messages from the log parsers.
  */
 export function buildUnifiedLog(parsedMessages) {
     if (!Array.isArray(parsedMessages)) {
@@ -95,9 +73,11 @@ export function buildUnifiedLog(parsedMessages) {
 
     resetLog();
 
-    const unifiedMessages = [];
+    const parsedCount = parsedMessages.length;
+    let validCount = 0;
     let skippedMessages = 0;
-    for (const msg of parsedMessages) {
+    for (let index = 0; index < parsedCount; index++) {
+        const msg = parsedMessages[index];
         if (!msg || !Number.isFinite(msg.timestamp) || !Number.isInteger(msg.arbitrationId) ||
             msg.arbitrationId < 0 || msg.arbitrationId > 0x1FFFFFFF ||
             (!Array.isArray(msg.data) && !(msg.data instanceof Uint8Array))) {
@@ -127,21 +107,20 @@ export function buildUnifiedLog(parsedMessages) {
             errorStateIndicator: msg.errorStateIndicator
         };
 
-        unifiedMessages.push(unifiedMessage);
-    }
-    if (skippedMessages > 0) {
-        console.warn(`Skipped ${skippedMessages} invalid CAN message(s) while loading the log.`);
-    }
-    if (unifiedMessages.length === 0 && parsedMessages.length > 0) {
-        throw new TypeError("The log contains no valid CAN messages.");
-    }
-    // Avoid log.push(...unifiedMessages): spreading a large array into arguments overflows the call stack.
-    for (const unifiedMessage of unifiedMessages) {
-        log.push(unifiedMessage);
+        parsedMessages[validCount++] = unifiedMessage;
         if (!unifiedMessage.isRemoteFrame && !unifiedMessage.isErrorFrame) {
             availableFrameKeys.add(frameKey(unifiedMessage.id, unifiedMessage.isExtendedId));
         }
     }
+    if (skippedMessages > 0) {
+        console.warn(`Skipped ${skippedMessages} invalid CAN message(s) while loading the log.`);
+    }
+    if (validCount === 0 && parsedCount > 0) {
+        availableFrameKeys = new Set();
+        throw new TypeError("The log contains no valid CAN messages.");
+    }
+    parsedMessages.length = validCount;
+    log = parsedMessages;
     return skippedMessages;
 }
 
