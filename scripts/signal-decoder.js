@@ -16,7 +16,7 @@ function rawEquals(value, expected) {
 }
 
 function sanitizeUnit(unit) {
-    return unit ? unit.replace(/[^\x20-\x7E°Ωμµ]/g, "").trim() : "";
+    return unit ? unit.replace(/[^\x20-\x7E°Ωμµ²³‰±·]/g, "").trim() : "";
 }
 
 export function toSigned(value, bitLength) {
@@ -47,7 +47,7 @@ export function findSignalInDatabase(database, signalName, messageNameOrId) {
     return null;
 }
 
-export function processSelectedSignals(selectedSignals, log, database) {
+export function processSelectedSignals(selectedSignals, log, database, onSkip) {
     if (!Array.isArray(selectedSignals) || !Array.isArray(log)) {
         throw new TypeError("Selected signals and log data must be arrays.");
     }
@@ -68,6 +68,13 @@ export function processSelectedSignals(selectedSignals, log, database) {
     for (const { signalName, signal, messageId } of wantedSignals) {
         if (!signal) {
             console.warn(`Signal "${signalName}" in message "${messageId}" not found.`);
+            continue;
+        }
+        const floatLength = { Float32: 32, Float64: 64 }[signal.valueType];
+        if (floatLength && signal.length !== floatLength) {
+            const reason = `${signal.valueType} requires a length of ${floatLength} bits, found ${signal.length}`;
+            console.warn(`Skipping "${signalName}": ${reason}.`);
+            onSkip?.(signalName, reason);
             continue;
         }
         const frames = framesById.get(frameKey(signal.messageId, signal.isExtendedId));

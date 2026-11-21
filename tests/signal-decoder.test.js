@@ -128,6 +128,28 @@ describe("signal decoder regressions", () => {
         expect(child.data).toEqual([{ timestamp: "inRange", value: 2 }]);
     });
 
+    test("skips float signals whose length does not match the float type", () => {
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        const database = { messages: [{ id: "0x100", name: "M", isExtendedId: false, signals: [
+            makeSignal({ name: "F32", valueType: "Float32", length: 16 }),
+            makeSignal({ name: "F64", valueType: "Float64", length: 32 })
+        ] }] };
+        const log = [{ id: "0x100", isExtendedId: false, data: [0, 0, 0, 0, 0, 0, 0, 0], timestamp: "t" }];
+        const onSkip = jest.fn();
+        const result = processSelectedSignals(
+            [{ signalName: "F32", messageId: "0x100" }, { signalName: "F64", messageId: "0x100" }], log, database, onSkip);
+        expect(result).toEqual([]);
+        expect(onSkip).toHaveBeenCalledWith("F32", expect.stringContaining("Float32"));
+        expect(onSkip).toHaveBeenCalledTimes(2);
+        expect(warn).toHaveBeenCalledTimes(2);
+        warn.mockRestore();
+    });
+
+    test("keeps superscripts and per-mille in units", () => {
+        const database = { messages: [{ id: "0x100", name: "M", isExtendedId: false, signals: [makeSignal({ units: "m/s²" })] }] };
+        expect(processSelectedSignals([{ signalName: "Speed", messageId: "0x100" }], [], database)[0].unit).toBe("m/s²");
+    });
+
     test("keeps the micro sign in units read from a UTF-8 file as windows-1252", () => {
         const database = { messages: [{ id: "0x100", name: "M", isExtendedId: false, signals: [makeSignal({ units: "Âµs" })] }] };
         const [result] = processSelectedSignals([{ signalName: "Speed", messageId: "0x100" }], [], database);

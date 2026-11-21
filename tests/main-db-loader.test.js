@@ -79,6 +79,9 @@ describe('databaseHandler', () => {
                 }]
             });
             expect(database.messages[0].signals.map(signal => signal.name)).toEqual(['Good', 'GoodFloat']);
+            expect(databaseHandler.skippedSignals).toBe(5);
+            databaseHandler.resetDatabase();
+            expect(databaseHandler.skippedSignals).toBe(0);
         } finally {
             warn.mockRestore();
         }

@@ -5,12 +5,14 @@ const MAX_DATABASE_FILE_SIZE = 128 * 1024 * 1024;
 
 const databaseHandler = {
     database: null,
+    skippedSignals: 0, // signals dropped by the last buildUnifiedDatabase call, for UI feedback
     dropdownContent: {
         Sender: [],
     },
 
     resetDatabase() {
         this.database = null;
+        this.skippedSignals = 0;
         this.dropdownContent = { Sender: [] };
     },
 
@@ -132,8 +134,9 @@ const databaseHandler = {
                     .map((msg) => msg.name),
             })),
         };
+        this.skippedSignals = skippedSignals;
         if (skippedSignals > 0) {
-            console.warn(`Skipped ${skippedSignals} signal(s) with an invalid bit layout or a missing multiplexer.`);
+            console.warn(`Skipped ${skippedSignals} signal(s) with an invalid bit layout, float size or missing multiplexer.`);
         }
         return database;
     },

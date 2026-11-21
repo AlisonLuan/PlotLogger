@@ -175,6 +175,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 const database = databaseHandler.getDatabase();
 
                 populateSignals(database); // Update UI elements
+                if (databaseHandler.skippedSignals > 0) {
+                    showToast(`Skipped ${databaseHandler.skippedSignals} signal(s) with an invalid bit layout, float size or multiplexer.`);
+                }
 
                 // Step 3: Enable the "Generate Plot" button if the log is also loaded
                 if (isLogLoaded()) {
@@ -407,7 +410,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     const processedLogs = decodeSelectedSignals(
                         selectedSignalsA,
                         log,
-                        databaseHandler.getDatabase()
+                        databaseHandler.getDatabase(),
+                        (signalName, reason) => showToast(`Skipped "${signalName}": ${reason}.`)
                     );
 
                     // Generate traces based on processed log
