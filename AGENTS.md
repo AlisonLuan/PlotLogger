@@ -231,12 +231,12 @@ The current test suite covers:
 - `tests/helper.test.js` — CAN bit extraction and byte order.
 - `tests/parser-dbc.test.js` — DBC IDs, messages, signals, scaling, enumerations, multiplexing-related metadata, float metadata, descriptions, and malformed inputs.
 - `tests/parser-sym.test.js` — SYM parsing, IDs, endian behavior, enumerations, descriptions, duplicate names, and edge cases.
-- `tests/parser-asc.test.js` — relative/absolute timestamps, classic frames, extended IDs, and skipped records.
+- `tests/parser-asc.test.js` — relative/absolute timestamps, classic frames, extended IDs, CAN FD frames, and skipped records.
 - `tests/parser-trc.test.js` — supported TRC versions, timestamps, FD flags, and unsupported version handling.
 - `tests/parser-blf.test.js` — BLF containers, compression, padding, object boundaries, size limits, timestamp precision, and invalid signatures.
 - `tests/main-db-loader.test.js` — database loading and unified database construction.
 - `tests/main-log-loader.test.js` — normalized log loading, channel zero, timestamp precision/domain, and malformed frames.
-- `tests/signal-decoder.test.js` — signal identity, signed values, multiplexing, remote/truncated frames, and float decoding.
+- `tests/signal-decoder.test.js` — signal identity, signed values, multiplexing, remote/truncated frames, and float decoding, and rounded 64-bit samples.
 - `tests/csv-export.test.js` — timestamp alignment/domain, CSV quoting, and empty traces.
 
 ### Required testing behavior for changes
