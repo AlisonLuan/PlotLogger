@@ -159,10 +159,6 @@ function updateYAxisProperty(axisNumber, property, value) {
     }
 }
 
-/*function updateXAxisProperty(property, value) {
-    plotLayout.xaxis[property] = value;
-}*/
-
 // Example usage:
 //updatePlotLayout('yaxis2:visible', true);   // Makes yaxis2 visible
 //updatePlotLayout('annotations:2:visible', true);  // Makes annotation 2 visible
@@ -325,10 +321,6 @@ function resetSubplotLayout() {
     // Delete all additional Y axis
     const extraYAxes = ["yaxis2", "yaxis3", "yaxis20", "yaxis30", "yaxis40", "yaxis50"];
     extraYAxes.forEach(axisName => {
-        /*if (!plotLayout[axisName]) {
-            plotLayout[axisName] = {};
-        }
-        plotLayout[axisName].visible = false;*/
         delete plotLayout[axisName];
     });
 
@@ -424,15 +416,6 @@ function updateSubplotLayout(selectedSubplots) {
 
     // Assign the constructed array to the layout
     plotLayout.grid.subplots = subplotsArray;
-
-    // Step 3: Reset Y-axis visibility to false (or create them if missing)
-    /*const yAxes = ["yaxis", "yaxis20", "yaxis30", "yaxis40", "yaxis50"];
-    yAxes.forEach(axis => {
-        if (!plotLayout[axis]) {
-            plotLayout[axis] = {};
-        }
-        plotLayout[axis].visible = false;
-    });*/
 
     // Step 4: Evenly divide domain
     const step = 1 / (activeCount || 1); 

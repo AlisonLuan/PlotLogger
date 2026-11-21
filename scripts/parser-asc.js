@@ -1,6 +1,7 @@
 import { readTrimmedLines } from './text-lines.js';
+import { checkFrameCount, throwIfAborted } from './log-limits.js';
 
-export async function parseASC(file) {
+export async function parseASC(file, signal) {
     let messages = [];
     let startTime = null; // epoch seconds from the "date" line, if any
     let deltaTimestamps = false; // "timestamps relative": each value is the gap to the previous event
@@ -9,6 +10,7 @@ export async function parseASC(file) {
     let base = 16; // Default to hex
 
     for await (const line of readTrimmedLines(file)) {
+        throwIfAborted(signal);
         if (line.startsWith("date ")) {
             // A date in an unknown format (e.g. another language) only loses the calendar anchor; frames stay as elapsed seconds.
             try {
@@ -63,6 +65,7 @@ export async function parseASC(file) {
         let data = frameType === "r" ? new Uint8Array() : parseData_asc(parts.slice(5), base);
         if (!data) continue;
 
+        checkFrameCount(messages.length);
         messages.push({
             // Without a "date" line there is no calendar anchor, so keep elapsed seconds.
             timestamp: isAbsolute ? timestamp + startTime : timestamp,

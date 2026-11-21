@@ -121,13 +121,3 @@ function displayConfigurationControls(data) {
         lineConfig.querySelector('.y-axis-selector').disabled = lineConfig.querySelector('.subplot-selector').value !== "sp1";
     });
 }
-
-/******************** Y Axis  ********************/
-// Function to update all fields (Min or Max) for the same Y-axis
-function updateAllFields(axis, fieldType, value) {
-    document.querySelectorAll(`.${fieldType}-input`).forEach(input => {
-        if (getSelectedYAxis(input) === axis) {
-            input.value = value; // Ensure all fields for the same axis have the same value
-        }
-    });
-}

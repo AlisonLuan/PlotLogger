@@ -1,12 +1,4 @@
 /**
- * Calculates the end bit position in a CAN message given the start bit and bit size.
- * Ensures correct alignment within byte boundaries.
- * 
- * @param {number} inputStartBit - The starting bit position.
- * @param {number} inputBitSize - The size of the signal in bits.
- * @returns {number} - The calculated end bit position.
- */
-/**
  * Extracts a raw value from a CAN message payload.
  * Supports both Big Endian (Motorola) and Little Endian formats.
  * 

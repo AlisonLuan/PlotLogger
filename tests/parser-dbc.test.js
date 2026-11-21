@@ -320,3 +320,19 @@ message comment";
     
 
 });
+
+describe('parseDBC extended multiplexing', () => {
+    test('keeps the switch named by SG_MUL_VAL_ when the signal also has an mN marker', () => {
+        const parsed = parseDBC(`
+BO_ 256 Frame: 8 Sender
+ SG_ First M : 0|8@1+ (1,0) [0|255] "" Rx
+ SG_ Second m1M : 8|8@1+ (1,0) [0|255] "" Rx
+ SG_ Child m0 : 16|8@1+ (1,0) [0|255] "" Rx
+SG_MUL_VAL_ 256 Child Second 5-7;
+`);
+        const child = parsed.messages[0].signals.find(signal => signal.name === 'Child');
+        expect(child.multiplexerName).toBe('Second');
+        expect(child.multiplexerStartBit).toBe(8);
+        expect(child.multiplexerRanges).toEqual([[5, 7]]);
+    });
+});

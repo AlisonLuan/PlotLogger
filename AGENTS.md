@@ -50,6 +50,7 @@ Use the existing stack. Do not introduce React, Vue, Angular, TypeScript, bundle
 | `scripts/parser-trc.js` | TRC text-log parser and version-specific layouts. |
 | `scripts/parser-blf.js` | BLF binary parser, object/container decoding, and decompression handling. |
 | `scripts/text-lines.js` | Asynchronous line reader used by text-log parsers. |
+| `scripts/log-limits.js` | Maximum frame count per log and the abort check shared by the log parsers. |
 | `scripts/helper.js` | CAN signal raw-bit extraction helper. |
 | `scripts/signal-decoder.js` | Frame identity, database signal lookup, raw-value conversion, multiplex filtering, scaling/offset, and decoded trace generation. |
 | `scripts/plot.js` | Plotly trace/layout generation and plot updates. |
@@ -61,7 +62,6 @@ Use the existing stack. Do not introduce React, Vue, Angular, TypeScript, bundle
 | `scripts/app-rev.js` | Build/revision label behavior. |
 | `scripts/plotly-3.0.0.min.js`, `scripts/pako.min.js` | Vendored third-party runtime libraries; treat as generated/vendor assets. |
 | `tests/` | Jest tests for helpers, loaders, parsers, signal decoding, and CSV export. |
-| `unifiedformat.json` | Example unified CAN database-shaped JSON data; do not assume it is the runtime database or a formal schema without checking consumers. |
 | `README.md` | User-facing project overview, run/test instructions, supported formats, limits, known limitations, and shortcut behavior. |
 | `package.json`, `package-lock.json`, `jest.config.js` | Dependency and test configuration. |
 | `.github/workflows/test.yml` | Runs the Jest suite on pushes and pull requests using Node.js 20 on Ubuntu and Windows. |
@@ -148,6 +148,7 @@ The current implementation enforces these limits:
 | Individual BLF decompressed container | 256 MiB |
 | Total BLF decompressed data | 512 MiB |
 | Text-log line length | 1 MiB characters |
+| Frames per log (ASC/TRC/BLF) | 10,000,000 |
 
 Treat these as intentional resource-safety boundaries. Do not raise or remove them casually. If a task requires changing a limit:
 

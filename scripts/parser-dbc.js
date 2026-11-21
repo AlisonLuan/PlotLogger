@@ -211,11 +211,13 @@ export function parseDBC(content) {
 
             if (signal.multiplexerValue !== undefined) {
                 signal.isMultiplexed = true;
-                if (muxSignal) {
-                    signal.multiplexerName = muxSignal.name;
-                    signal.multiplexerStartBit = muxSignal.startBit;
-                    signal.multiplexerLength = muxSignal.length;
-                    signal.multiplexerByteOrder = muxSignal.byteOrder;
+                // Keep the switch named by SG_MUL_VAL_; otherwise use the first multiplexer.
+                const mux = msg.signals.find(sig => sig.isMultiplexer && sig.name === signal.multiplexerName) ?? muxSignal;
+                if (mux) {
+                    signal.multiplexerName = mux.name;
+                    signal.multiplexerStartBit = mux.startBit;
+                    signal.multiplexerLength = mux.length;
+                    signal.multiplexerByteOrder = mux.byteOrder;
                 }
             } else {
                 signal.isMultiplexed = signal.isMultiplexed ?? false;

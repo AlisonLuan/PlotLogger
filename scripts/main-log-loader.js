@@ -25,7 +25,7 @@ export function isLogLoaded() {
     return Array.isArray(log) && log.length > 0;
 }
 
-export async function parseFileLOG(file) {
+export async function parseFileLOG(file, signal) {
     try {
         const fileExtension = file.name.split('.').pop().toLowerCase();
         const maxFileSize = fileExtension === 'blf' ? MAX_BINARY_LOG_FILE_SIZE : MAX_TEXT_LOG_FILE_SIZE;
@@ -39,13 +39,13 @@ export async function parseFileLOG(file) {
 
         switch (fileExtension) {
             case 'blf':
-                parsedData = await parseBLF(file); // Directly handle BLF files
+                parsedData = await parseBLF(file, signal); // Directly handle BLF files
                 break;
             case 'trc':
-                parsedData = await parseTRC(file); // Handle TRC files
+                parsedData = await parseTRC(file, signal); // Handle TRC files
                 break;
             case 'asc':
-                parsedData = await parseASC(file); // Handle ASC files
+                parsedData = await parseASC(file, signal); // Handle ASC files
                 break;
             default:
                 throw new Error(`Unsupported log file format: .${fileExtension}`);
@@ -53,10 +53,11 @@ export async function parseFileLOG(file) {
         return parsedData;
 
     } catch (error) {
-        console.error("Error processing the log file:", error);
+        if (!signal?.aborted) console.error("Error processing the log file:", error);
         throw error;
     } finally {
-        document.body.style.cursor = 'default'; // Revert cursor to default
+        // A superseded parse must not reset the cursor of the newer load.
+        if (!signal?.aborted) document.body.style.cursor = 'default';
     }
 }
 

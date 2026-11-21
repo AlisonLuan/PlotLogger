@@ -1,9 +1,10 @@
+import { checkFrameCount, throwIfAborted } from "./log-limits.js";
+
 // CAN Message Types
 const CAN_MESSAGE = 1;
 const LOG_CONTAINER = 10;
 const CAN_ERROR_EXT = 73;
 const CAN_MESSAGE2 = 86;
-const GLOBAL_MARKER = 96;
 const CAN_FD_MESSAGE = 100;
 const CAN_FD_MESSAGE_64 = 101;
 
@@ -14,14 +15,8 @@ const ZLIB_DEFLATE = 2;
 // CAN Flags
 const CAN_MSG_EXT = 0x80000000;
 const REMOTE_FLAG = 0x80;
-const EDL = 0x1;
-const BRS = 0x2;
-const ESI = 0x4;
 const DIR = 0x1;
 
-// Time Units
-const TIME_TEN_MICS = 0x00000001;
-const TIME_ONE_NANS = 0x00000002;
 const MAX_BLF_FILE_SIZE = 512 * 1024 * 1024;
 const MAX_CONTAINER_SIZE = 256 * 1024 * 1024;
 const MAX_BLF_UNCOMPRESSED_SIZE = 512 * 1024 * 1024;
@@ -34,7 +29,7 @@ const CAN_ERROR_EXT_BODY_SIZE = 32;
 const CAN_FD_MESSAGE_BODY_SIZE = 84;
 
 
-export async function parseBLF(file) {
+export async function parseBLF(file, signal) {
     try {
         const parsedMessages = [];
         if (file.size > MAX_BLF_FILE_SIZE) {
@@ -64,8 +59,10 @@ export async function parseBLF(file) {
         let tailIsIncompleteObject = false;
         let skippedObjects = 0;
         while (offset + 16 <= fileSize) {
+            throwIfAborted(signal);
             const objectBuffer = await file.slice(offset, offset + 16).arrayBuffer();
-            const object = OBJ_HEADER_BASE_STRUCTunpack(new DataView(objectBuffer));
+            const [signature, headerSize, , objectSize, objectType] = unpackObjHeaderBase(new Uint8Array(objectBuffer));
+            const object = { signature, headerSize, objectSize, objectType };
             if (object.signature !== "LOBJ") {
                 throw new Error(`Invalid BLF object signature at byte ${offset}.`);
             }
@@ -118,6 +115,7 @@ export async function parseBLF(file) {
                 }
                 const state = { end: 0, incomplete: false, skipped: 0 };
                 for (const message of parseData(containerData, startTimestamp, state)) {
+                    checkFrameCount(parsedMessages.length);
                     parsedMessages.push({
                         ...(startTimestamp === null && { isRelativeTimestamp: true }),
                         timestamp: message.timestamp,
@@ -199,50 +197,6 @@ export async function parseBLF(file) {
     }
 }
 
-
-/**
- * Unpacks the OBJ_HEADER_BASE_STRUCT from a DataView.
- * @param {DataView} dataView - The binary data as a DataView.
- * @returns {object} The unpacked fields as an object containing the object header base information.
- * @throws {Error} If the input is not a DataView object.
- */
-function OBJ_HEADER_BASE_STRUCTunpack(dataView) {
-    // Validate input
-    if (!(dataView instanceof DataView)) {
-        throw new Error("Input must be a DataView object.");
-    }
-
-    let offset = 0;
-
-    // Parse the fields as defined in the struct
-    const signature = String.fromCharCode(
-        dataView.getUint8(offset++),
-        dataView.getUint8(offset++),
-        dataView.getUint8(offset++),
-        dataView.getUint8(offset++)
-    );
-
-    const headerSize = dataView.getUint16(offset, true); // Little-endian
-    offset += 2;
-
-    const headerVersion = dataView.getUint16(offset, true); // Little-endian
-    offset += 2;
-
-    const objectSize = dataView.getUint32(offset, true); // Little-endian
-    offset += 4;
-
-    const objectType = dataView.getUint32(offset, true); // Little-endian
-    offset += 4;
-
-    // Return the unpacked values as an object
-    return {
-        signature,
-        headerSize,
-        headerVersion,
-        objectSize,
-        objectType
-    };
-}
 
 /**
  * Unpacks the FILE_HEADER_STRUCT from a DataView.

@@ -1,4 +1,5 @@
 import { readTrimmedLines } from './text-lines.js';
+import { checkFrameCount, throwIfAborted } from './log-limits.js';
 
 class TRCFileVersion {
     static UNKNOWN = 0;
@@ -15,7 +16,7 @@ function isExtendedIdText(idText) {
     return (idText?.length ?? 0) > 4 || parseInt(idText, 16) > 0x7FF;
 }
 
-export async function parseTRC(file) {
+export async function parseTRC(file, signal) {
     let fileVersion = TRCFileVersion.V1_0;
     let startTime = 0;
     let hasStartTime = false;
@@ -118,6 +119,7 @@ export async function parseTRC(file) {
     }    
 
     for await (const line of readTrimmedLines(file)) {
+        throwIfAborted(signal);
         if (line.startsWith(";$FILEVERSION")) {
             const version = line.split("=")[1];
             fileVersion = TRCFileVersion["V" + version.replace(".", "_")] || TRCFileVersion.UNKNOWN;
@@ -147,7 +149,10 @@ export async function parseTRC(file) {
         } else if (!line.startsWith(";") && line.length > 0) {
             const cols = line.split(/\s+/);
             const msg = parseMessage(cols);
-            if (msg) messages.push(msg);
+            if (msg) {
+                checkFrameCount(messages.length);
+                messages.push(msg);
+            }
         }
     }
 

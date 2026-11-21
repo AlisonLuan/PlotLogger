@@ -16,7 +16,7 @@ function rawEquals(value, expected) {
 }
 
 function sanitizeUnit(unit) {
-    return unit ? unit.replace(/[^\x20-\x7E°Ωμ]/g, "").trim() : "";
+    return unit ? unit.replace(/[^\x20-\x7E°Ωμµ]/g, "").trim() : "";
 }
 
 export function toSigned(value, bitLength) {
@@ -51,23 +51,26 @@ export function processSelectedSignals(selectedSignals, log, database) {
     if (!Array.isArray(selectedSignals) || !Array.isArray(log)) {
         throw new TypeError("Selected signals and log data must be arrays.");
     }
+    // Only frames of the selected signals are collected, so a replot does not copy the whole log.
+    const wantedSignals = selectedSignals.map(({ signalName, messageId }) =>
+        ({ signalName, signal: findSignalInDatabase(database, signalName, messageId), messageId }));
     const framesById = new Map();
+    for (const { signal } of wantedSignals) {
+        if (signal) framesById.set(frameKey(signal.messageId, signal.isExtendedId), []);
+    }
     for (const message of log) {
         if (message.isRemoteFrame || message.isErrorFrame) continue;
-        const key = frameKey(message.id, message.isExtendedId);
-        if (!framesById.has(key)) framesById.set(key, []);
-        framesById.get(key).push(message);
+        framesById.get(frameKey(message.id, message.isExtendedId))?.push(message);
     }
 
     const isRelativeTimestamp = log.length > 0 && log.every(message => message.isRelativeTimestamp === true);
     const processedLogs = [];
-    for (const { signalName, messageId } of selectedSignals) {
-        const signal = findSignalInDatabase(database, signalName, messageId);
+    for (const { signalName, signal, messageId } of wantedSignals) {
         if (!signal) {
             console.warn(`Signal "${signalName}" in message "${messageId}" not found.`);
             continue;
         }
-        const frames = framesById.get(frameKey(signal.messageId, signal.isExtendedId)) || [];
+        const frames = framesById.get(frameKey(signal.messageId, signal.isExtendedId));
         const series = [];
         let warnedPrecision = false;
         for (const message of frames) {
@@ -78,7 +81,8 @@ export function processSelectedSignals(selectedSignals, log, database) {
                     signal.multiplexerLength,
                     signal.multiplexerByteOrder
                 );
-                const scalarMatch = signal.multiplexerValue !== undefined &&
+                // A SG_MUL_VAL_ range replaces the placeholder mN value from the SG_ line.
+                const scalarMatch = !signal.multiplexerRanges && signal.multiplexerValue !== undefined &&
                     rawEquals(muxValue, signal.multiplexerValue);
                 const rangeMatch = signal.multiplexerRanges?.some(([minimum, maximum]) => {
                     const value = Number(muxValue);

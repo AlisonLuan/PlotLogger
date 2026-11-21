@@ -109,3 +109,37 @@ describe("signal decoder", () => {
         expect(results[1].data).toEqual([{ timestamp: "inside", value: 0, description: "Stopped" }]);
     });
 });
+
+
+describe("signal decoder regressions", () => {
+    test("a SG_MUL_VAL_ range replaces the placeholder mN value", () => {
+        const database = { messages: [{ id: "0x100", name: "M", isExtendedId: false, signals: [
+            makeSignal({ name: "Sel", isMultiplexer: true }),
+            makeSignal({
+                name: "Child", startBit: 8, isMultiplexed: true, multiplexerValue: 0, multiplexerRanges: [[5, 7]],
+                multiplexerStartBit: 0, multiplexerLength: 8, multiplexerByteOrder: "LittleEndian"
+            })
+        ] }] };
+        const log = [
+            { id: "0x100", isExtendedId: false, data: [0, 1], timestamp: "placeholder" },
+            { id: "0x100", isExtendedId: false, data: [6, 2], timestamp: "inRange" }
+        ];
+        const [child] = processSelectedSignals([{ signalName: "Child", messageId: "0x100" }], log, database);
+        expect(child.data).toEqual([{ timestamp: "inRange", value: 2 }]);
+    });
+
+    test("keeps the micro sign in units read from a UTF-8 file as windows-1252", () => {
+        const database = { messages: [{ id: "0x100", name: "M", isExtendedId: false, signals: [makeSignal({ units: "Âµs" })] }] };
+        const [result] = processSelectedSignals([{ signalName: "Speed", messageId: "0x100" }], [], database);
+        expect(result.unit).toBe("µs");
+    });
+
+    test("ignores selected signals that are not in the database and unselected frames", () => {
+        const database = { messages: [{ id: "0x100", name: "M", isExtendedId: false, signals: [makeSignal()] }] };
+        const log = [{ id: "0x300", isExtendedId: false, data: [1], timestamp: "other" }];
+        const results = processSelectedSignals(
+            [{ signalName: "Nope", messageId: "0x100" }, { signalName: "Speed", messageId: "0x100" }], log, database);
+        expect(results).toHaveLength(1);
+        expect(results[0].data).toEqual([]);
+    });
+});

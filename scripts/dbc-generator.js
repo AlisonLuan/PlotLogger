@@ -94,11 +94,12 @@ function collectStats(log) {
                         if ((diff >> bit) & 1) stats.toggles[byte * 8 + bit]++;
                     }
                 }
-                COUNTER_FIELDS.forEach((field, index) => {
+                for (let index = 0; index < COUNTER_FIELDS.length; index++) {
+                    const field = COUNTER_FIELDS[index];
                     const mask = (1 << field.bits) - 1;
                     const delta = (((data[byte] >> field.shift) & mask) - ((previous[byte] >> field.shift) & mask)) & mask;
                     if (delta === 1) stats.counterHits[byte * COUNTER_FIELDS.length + index]++;
-                });
+                }
             }
         }
         stats.previous = data;

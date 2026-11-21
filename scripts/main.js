@@ -23,6 +23,7 @@ function refreshAvailableSignals() {
 
 let databaseLoadGeneration = 0;
 let logLoadGeneration = 0;
+let logLoadAbort = null; // stops the parse of a log that a newer drop replaced
 let generatedDbcText = null; // DBC text of the database generated from the log, if that is the active one
 
 function clearCurrentPlot() {
@@ -227,6 +228,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const generation = ++logLoadGeneration;
         const file = files[0];
+        logLoadAbort?.abort();
+        logLoadAbort = new AbortController();
         document.getElementById("PlotButton").disabled = true;
         clearCurrentPlot();
         resetLog();
@@ -237,7 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!['.blf', '.trc', '.asc'].includes(file.name.slice(file.name.lastIndexOf('.')).toLowerCase())) {
                 throw new Error("Only .blf, .trc and .asc log files are supported.");
             }
-            const parsedData = await parseFileLOG(file);
+            const parsedData = await parseFileLOG(file, logLoadAbort.signal);
             if (generation !== logLoadGeneration) return;
             if (!Array.isArray(parsedData) || parsedData.length === 0) {
                 throw new Error("The selected log contains no CAN messages.");
