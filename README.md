@@ -25,7 +25,7 @@ npm test
 - Logs: ASC, TRC, and BLF
 - BLF: classic CAN, CAN FD, CAN error frames, zlib-compressed containers, and multiple containers (objects split across containers are joined; a CAN object too small for its type is skipped)
 - TRC IDs written with more than 4 hex digits are treated as extended; TRC 1.2 is explicitly rejected; other TRC versions are parsed according to their supported layouts
-- ASC CAN FD records are skipped; classic data and remote frames are parsed
+- ASC classic data, remote and CAN FD (`CANFD`) data frames are parsed (up to 64 data bytes); CAN FD error frames are skipped
 - Absolute ASC date lines are interpreted as UTC to keep timestamps consistent across formats
 - Log channels are normalized to zero-based indices across ASC, TRC, and BLF
 - Text logs (TRC/ASC, streamed line by line) are limited to 1 GiB and databases to 128 MiB; BLF files to 512 MiB, with a 256 MiB per-container and 512 MiB total decompressed-data limit; all log formats are also limited to 10,000,000 CAN frames, because each frame is held in browser memory
@@ -45,7 +45,7 @@ No database? Load a log, then click **Generate database from log** in the Start 
 
 ## Known limitations
 
-- TRC 1.2 is not supported; ASC CAN FD records are skipped.
+- TRC 1.2 is not supported.
 - Database signals with a zero or over-64-bit length, a Float length other than 32/64, or a multiplexed signal with no valid multiplexer are skipped with a console warning.
 - Parsing and plotting run on the main browser thread, so large accepted files can take time to load or plot.
 - The delta cursor supports only the main subplot and primary Y axis; gear-panel limits apply to the three main Y axes, not subplot-specific axes.

@@ -95,6 +95,26 @@ Start of measurement: this should be ignored too
     expect(messages[1].data).toHaveLength(0);
   });
 
+  test('parses CAN FD records with and without a symbolic name', async () => {
+    const payload = Array.from({ length: 12 }, (_, index) => index.toString(16).padStart(2, '0'));
+    const messages = await parseASC({
+      text: async () => [
+        `0.001 CANFD 1 Rx 1A2x Name 1 0 9 12 ${payload.join(' ')} 0 0 0 0`,
+        `0.002 CANFD 2 Tx 123 0 1 8 8 ${payload.slice(0, 8).join(' ')} 0 0`,
+        '0.003 CANFD 1 Rx 123 Name 1 0 8 8 00 01', // truncated payload
+        '0.004 CANFD 1 Rx 123 Name 2 0 8 8 00 01 02 03 04 05 06 07', // bad BRS flag
+        '0.005 CANFD 1 Rx ErrorFrame'
+      ].join('\n')
+    });
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({
+      timestamp: 0.001, arbitrationId: 0x1A2, isExtendedId: true, channel: 0, isFd: true, isRx: true
+    });
+    expect(Array.from(messages[0].data)).toEqual(Array.from({ length: 12 }, (_, index) => index));
+    expect(messages[1]).toMatchObject({ arbitrationId: 0x123, channel: 1, isFd: true, isRx: false });
+    expect(messages[1].data).toHaveLength(8);
+  });
+
   test('parses absolute dec messages correctly', async () => {
     // In this case we provide a date line and a base line to switch to absolute timestamp mode with base 10.
     const fileContent = `

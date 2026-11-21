@@ -44,6 +44,15 @@ export async function parseASC(file, signal) {
             if (!Number.isFinite(nextElapsed)) continue;
             elapsed = nextElapsed;
         }
+        // CAN FD "ts CANFD ch dir id [name] brs esi dlc len data..." is rewritten to the classic "ts ch id dir d len data..." layout.
+        const isFd = parts[1] === "CANFD";
+        if (isFd) {
+            const [, , channelField, direction, idField, ...rest] = parts;
+            if (!/^[01]$/.test(rest[0] ?? "")) rest.shift(); // optional symbolic name
+            if (!/^[01]$/.test(rest[0] ?? "") || !/^[01]$/.test(rest[1] ?? "") || !/^\d+$/.test(rest[3] ?? "")) continue;
+            // The data length is decimal even in hex logs; a classic-style length field would be read in `base`.
+            parts = [parts[0], channelField, idField, direction, "d", Number(rest[3]).toString(base), ...rest.slice(4)];
+        }
         if (!/^\d+$/.test(parts[1])) {
             continue;
         }
@@ -63,7 +72,7 @@ export async function parseASC(file, signal) {
         if (frameType !== "r" && frameType !== "d") continue;
         const isAbsolute = absoluteTimestamps && !deltaTimestamps && startTime !== null;
         let data = frameType === "r" ? new Uint8Array() : parseData_asc(parts.slice(5), base);
-        if (!data) continue;
+        if (!data || (isFd && data.length > 64)) continue;
 
         checkFrameCount(messages.length);
         messages.push({
@@ -76,6 +85,7 @@ export async function parseASC(file, signal) {
             isExtendedId,
             isRemoteFrame: frameType === "r",
             isRx,
+            ...(isFd && { isFd: true }),
         });
     }
 

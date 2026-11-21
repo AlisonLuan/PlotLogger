@@ -128,7 +128,7 @@ The README and tests describe the following support:
 
 - BLF support includes classic CAN, CAN FD, CAN error frames, zlib-compressed containers, and multiple containers.
 - TRC 1.2 is explicitly rejected. Other supported TRC versions are parsed according to their supported layouts.
-- ASC CAN FD records are skipped; classic data and remote frames are parsed.
+- ASC classic data, remote and CAN FD data frames are parsed (CAN FD error frames are skipped).
 - Absolute ASC date lines are interpreted as UTC.
 - Channels are normalized to zero-based indices across ASC, TRC, and BLF.
 - Relative ASC timestamps are plotted/exported as elapsed seconds.
