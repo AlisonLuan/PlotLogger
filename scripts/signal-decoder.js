@@ -113,10 +113,9 @@ export function processSelectedSignals(selectedSignals, log, database, onSkip) {
             if (typeof rawValue === "bigint" &&
                 (rawValue > BigInt(Number.MAX_SAFE_INTEGER) || rawValue < BigInt(Number.MIN_SAFE_INTEGER))) {
                 if (!warnedPrecision) {
-                    console.warn(`Skipping "${signalName}" samples that exceed JavaScript's exact integer range.`);
+                    console.warn(`"${signalName}" has samples beyond JavaScript's exact integer range; they are plotted rounded to the nearest double.`);
                     warnedPrecision = true;
                 }
-                continue;
             }
             const value = Number(rawValue) * (signal.scaling ?? 1) + (signal.offset ?? 0);
             if (Number.isFinite(value)) {

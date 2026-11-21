@@ -107,7 +107,7 @@ When changing `helper.js` or `signal-decoder.js`, preserve and test:
 - Float32/Float64 decoding where supported by DBC metadata.
 - Correct standard/extended frame matching.
 - Skipping remote frames, truncated payloads, malformed values, and non-finite results where the current implementation requires it.
-- Exact-integer handling: JavaScript `Number` cannot exactly represent every 64-bit integer. The current decoder skips samples outside `Number.MAX_SAFE_INTEGER` / `Number.MIN_SAFE_INTEGER` and warns rather than plotting rounded values. Do not remove this protection without designing and testing a precision-preserving alternative.
+- Exact-integer handling: JavaScript `Number` cannot exactly represent every 64-bit integer. The decoder extracts and sign-converts raw values with `BigInt`; samples outside `Number.MAX_SAFE_INTEGER` / `Number.MIN_SAFE_INTEGER` are plotted rounded to the nearest double with a console warning (user-approved in 1.2.1) and must never be presented as exact.
 
 ## 5. Supported input formats and documented behavior
 
@@ -202,7 +202,7 @@ The current UI supports trace customization, hover comparison/closest behavior, 
 
 - Delta cursor works only on the main subplot and primary Y axis.
 - Gear-panel limits apply to the three main Y axes, not subplot-specific axes.
-- Integer signal samples outside JavaScript's exact integer range are skipped with a console warning.
+- Integer signal samples outside JavaScript's exact integer range are plotted rounded, with a console warning.
 - Parsing and plotting run on the browser main thread; large accepted files may take time.
 
 Do not claim that an interaction applies to all subplots/axes unless implementation and tests demonstrate it. Avoid changes that reset loaded data or plots when opening the shortcuts dialog; the documented behavior is that the in-page dialog preserves loaded data and plots. Ctrl-click or middle-click on the Shortcuts link opens the page in a new tab.
@@ -367,7 +367,7 @@ Unless the user explicitly approves a justified change, agents must not:
 - Remove or weaken parser validation, size limits, decompression limits, or malformed-input handling.
 - Change timestamp units/domains or channel/identifier normalization without updating all affected code and tests.
 - Match CAN frames by numeric ID alone when standard/extended identity matters.
-- Convert unsafe 64-bit integer values to rounded JavaScript numbers and present them as exact.
+- Present rounded 64-bit integer samples as exact (they are plotted rounded, with a warning).
 - Inject imported/user-controlled values through `innerHTML`.
 - Hand-edit minified vendor libraries.
 - Add a framework/build system/dependency for convenience without an approved rationale.

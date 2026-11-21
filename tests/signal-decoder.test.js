@@ -128,6 +128,22 @@ describe("signal decoder regressions", () => {
         expect(child.data).toEqual([{ timestamp: "inRange", value: 2 }]);
     });
 
+    test("plots 64-bit samples beyond the exact integer range as rounded numbers and warns once", () => {
+        const database = { messages: [{ id: "0x100", name: "M", isExtendedId: false,
+            signals: [makeSignal({ name: "Big", length: 64, scaling: 2, offset: 1 })] }] };
+        const maxBytes = [255, 255, 255, 255, 255, 255, 255, 255];
+        const log = [
+            { id: "0x100", isExtendedId: false, data: [5, 0, 0, 0, 0, 0, 0, 0], timestamp: 1 },
+            { id: "0x100", isExtendedId: false, data: maxBytes, timestamp: 2 },
+            { id: "0x100", isExtendedId: false, data: maxBytes, timestamp: 3 }
+        ];
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        const [trace] = processSelectedSignals([{ signalName: "Big", messageId: "0x100" }], log, database);
+        expect(warn).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
+        expect(trace.data.map(sample => sample.value)).toEqual([11, 2 ** 65 + 1, 2 ** 65 + 1]);
+    });
+
     test("skips float signals whose length does not match the float type", () => {
         const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
         const database = { messages: [{ id: "0x100", name: "M", isExtendedId: false, signals: [

@@ -1,6 +1,6 @@
 {
   "name": "plotlogger",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Browser-based CAN log signal plotter",
   "license": "MIT",
   "dependencies": {

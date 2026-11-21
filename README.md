@@ -50,7 +50,7 @@ No database? Load a log, then click **Generate database from log** in the Start 
 - Parsing and plotting run on the main browser thread, so large accepted files can take time to load or plot.
 - The delta cursor supports only the main subplot and primary Y axis; gear-panel limits apply to the three main Y axes, not subplot-specific axes.
 - Generated databases are heuristic estimates (see above) and may need manual correction.
-- Integer signal samples outside JavaScript's exact integer range are skipped with a console warning rather than plotted with rounded values.
+- Integer signal samples outside JavaScript's exact integer range (beyond 2^53) are decoded exactly but plotted and exported rounded to the nearest double, with a console warning.
 
 ## Shortcuts
 
