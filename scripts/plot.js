@@ -317,6 +317,10 @@ function resetSubplotLayout() {
     // Set main Y-axis visible
     plotLayout.yaxis.visible = true;
     plotLayout.yaxis.domain = [0, 1];
+    // Drop stale per-subplot domains from a previous plot so y2/y3 don't inherit them
+    ["sp1", "sp2", "sp3", "sp4", "sp5"].forEach(sp => {
+        plotData.activeSubplots[`${sp}domain`] = [0, 1];
+    });
 
     // Delete all additional Y axis
     const extraYAxes = ["yaxis2", "yaxis3", "yaxis20", "yaxis30", "yaxis40", "yaxis50"];
